@@ -126,6 +126,7 @@ const CHIPS = [
   ["politica", "Política"],
   ["noticias", "Notícias"],
   ["economia", "Economia"],
+  ["eua", "EUA"],
   ["aovivo", "Ao vivo"],
   ["curto", "Até 20 min"],
   ["longo", "Mais de 40 min"],

@@ -13,13 +13,13 @@ próprio da Cloudflare em **https://yt.faaretz.site** (separado do túnel dos ou
   (quantas vezes ele aparece no seu histórico, o que você marca como visto, salva ou oculta),
   frescor, peso da categoria, assuntos que você curte e alcance. Canais repetidos são intercalados.
   Cada vídeo mostra o motivo ("você viu 23 vídeos deste canal · fala de lula, debate").
-- **Filtros**: Cortes, Debates, Podcasts, Política, Notícias, Economia, Ao vivo, até 20 min, mais de 40 min, Novos.
+- **Filtros**: Cortes, Debates, Podcasts, Política, Notícias, Economia, EUA, Ao vivo, até 20 min, mais de 40 min, Novos.
 - **Recentes** (cronológico, agrupado por dia), **Continuar assistindo**, **Assistir depois** (fila, com
   "Reproduzir esta lista"), **Histórico** (agrupado por dia, como no YouTube), **Ocultos**.
 - **Player embutido** com velocidade (1x a 2x), retomada de onde parou, barra vermelha de progresso,
   "Visto e próximo", autoplay da lista e marcação automática como visto ao terminar.
-- **Canais**: ~75 canais já sugeridos (do seu histórico, política, debates, podcasts famosos, canais de
-  cortes, e um grupo "contraponto" que começa silenciado). Adicione qualquer canal colando o link;
+- **Canais**: ~107 canais já sugeridos (do seu histórico, política, debates, podcasts famosos, canais de
+  cortes, política americana (Asmongold, Benny Johnson, Tucker, Shapiro, Timcast, PBD, Jubilee...), e um grupo "contraponto" que começa silenciado). Adicione qualquer canal colando o link;
   ajuste prioridade (menos/mais), categoria, silencie ou remova.
 - **Importar histórico**: favorito "Enviar para a Timeline" (roda em youtube.com/feed/history e
   /feed/channels) ou arquivos do Google Takeout (watch-history.json/.html e subscriptions.csv).
@@ -27,7 +27,7 @@ próprio da Cloudflare em **https://yt.faaretz.site** (separado do túnel dos ou
 - **Ajustes**: esconder vistos/Shorts, intervalo de atualização, peso por categoria, assuntos
   preferidos, palavras bloqueadas, backup e restauração.
 - Atalhos: `j`/`k` navegar, `Enter` assistir, `v` visto, `d` depois, `x` ocultar, `/` buscar, `r` atualizar, `n` próximo.
-- Senha de acesso (o site fica público pelo túnel). Funciona no celular (dá para "adicionar à tela inicial").
+- Senha de acesso (o site fica público pelo túnel). Você entra uma vez em cada aparelho e fica logado (a sessão é renovada a cada visita). Funciona no celular (dá para "adicionar à tela inicial").
 
 ## Instalação no PC (Windows)
 

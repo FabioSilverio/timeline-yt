@@ -43,7 +43,7 @@ const SENHA =
   });
 const SEGREDO = lerOuCriar(path.join(armazem.dir, "segredo.txt"), () => crypto.randomBytes(32).toString("hex"));
 const COOKIE = "tl_sessao";
-const UM_ANO = 365 * 24 * 3600;
+const VALIDADE = 400 * 24 * 3600; // o máximo que o Chrome aceita; renovado a cada visita
 
 function assinar(valor) {
   return valor + "." + crypto.createHmac("sha256", SEGREDO).update(valor).digest("base64url");
@@ -55,7 +55,12 @@ function sessaoValida(req) {
   const [valor] = m[1].split(".");
   const esperado = Buffer.from(assinar(valor));
   const recebido = Buffer.from(m[1]);
-  return esperado.length === recebido.length && crypto.timingSafeEqual(esperado, recebido);
+  return esperado.length === recebido.length && crypto.timingSafeEqual(esperado, recebido) ? m[1] : false;
+}
+
+function cookieSessao(req, token) {
+  const seguro = req.headers["x-forwarded-proto"] === "https" || req.headers["cf-visitor"]?.includes("https");
+  return `${COOKIE}=${token}; Path=/; Max-Age=${VALIDADE}; HttpOnly; SameSite=Lax${seguro ? "; Secure" : ""}`;
 }
 
 const tentativas = new Map();
@@ -279,7 +284,7 @@ async function api(req, res, rota) {
       if (agora - (e.ultimaVisita || 0) > 30 * 60e3) e.visitaAnterior = e.ultimaVisita || agora;
       e.ultimaVisita = agora;
       armazem.salvar();
-      return enviar(req, res, 200, { visitaAnterior: e.visitaAnterior });
+      return enviar(req, res, 200, { visitaAnterior: e.visitaAnterior }, undefined, { "Set-Cookie": cookieSessao(req, sessaoValida(req)) });
     }
     case "/api/canal": {
       if (corpo.acao === "adicionar") {
@@ -372,9 +377,8 @@ const servidor = http.createServer(async (req, res) => {
       const b = Buffer.from(SENHA);
       if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
         tentativas.delete(ip);
-        const seguro = req.headers["x-forwarded-proto"] === "https" || req.headers["cf-visitor"]?.includes("https");
         return enviar(req, res, 200, { ok: true }, undefined, {
-          "Set-Cookie": `${COOKIE}=${assinar(crypto.randomBytes(12).toString("base64url"))}; Path=/; Max-Age=${UM_ANO}; HttpOnly; SameSite=Lax${seguro ? "; Secure" : ""}`,
+          "Set-Cookie": cookieSessao(req, assinar(crypto.randomBytes(12).toString("base64url"))),
         });
       }
       t.n++;
