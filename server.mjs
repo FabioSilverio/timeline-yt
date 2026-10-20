@@ -19,6 +19,7 @@ const RAIZ = path.dirname(fileURLToPath(import.meta.url));
 const PUBLICO = path.join(RAIZ, "public");
 const PORTA = Number(process.env.TIMELINE_PORTA || 3220);
 const HOST = process.env.TIMELINE_HOST || "127.0.0.1";
+const INICIO = new Date().toISOString();
 
 const armazem = new Armazem();
 const motor = new Motor(armazem);
@@ -454,6 +455,8 @@ const servidor = http.createServer(async (req, res) => {
     }
 
     if (ARQUIVOS_LIVRES.has(rota)) return servirArquivo(req, res, path.join(PUBLICO, rota));
+    // Sem login: só a versão em execução, para conferir se a atualização entrou
+    if (rota === "/versao") return enviar(req, res, 200, { versao: atualizador.info.commit, desde: INICIO, autoAtualiza: atualizador.info.ativo });
 
     if (!sessaoValida(req)) {
       if (rota.startsWith("/api/")) return enviar(req, res, 401, { erro: "faça login" });
