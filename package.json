@@ -1,0 +1,13 @@
+{
+  "name": "timeline-yt",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minha timeline do YouTube: cortes, debates, política e podcasts ranqueados pelo meu histórico.",
+  "type": "module",
+  "engines": { "node": ">=18.18" },
+  "scripts": {
+    "start": "node server.mjs",
+    "demo": "node --import ./test/youtube-falso.mjs server.mjs",
+    "test": "node --test test/logica.test.mjs"
+  }
+}

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f0f0f">
+  <title>Timeline YT</title>
+  <link rel="icon" href="/icone.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="/estilo.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="topo-esq">
+      <button class="icone-btn" id="btn-menu" title="Menu" aria-label="Menu">
+        <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+      </button>
+      <a class="logo" href="#/inicio" title="Início">
+        <svg viewBox="0 0 28 20" class="logo-play"><rect width="28" height="20" rx="5" fill="#ff0033"/><path d="M11 5.5v9l8-4.5z" fill="#fff"/></svg>
+        <span>Timeline</span><sup>BR</sup>
+      </a>
+    </div>
+    <form class="busca" id="form-busca" role="search">
+      <input id="busca" type="search" placeholder="Pesquisar na timeline" autocomplete="off" aria-label="Pesquisar">
+      <button type="button" class="busca-limpar" id="busca-limpar" aria-label="Limpar">
+        <svg viewBox="0 0 24 24"><path d="m12.7 12 6.2-6.2-.7-.7-6.2 6.2-6.2-6.2-.7.7 6.2 6.2-6.2 6.2.7.7 6.2-6.2 6.2 6.2.7-.7z"/></svg>
+      </button>
+      <button class="busca-ir" aria-label="Pesquisar">
+        <svg viewBox="0 0 24 24"><path d="m20.87 20.17-5.59-5.59A6.96 6.96 0 0 0 17 10c0-3.87-3.13-7-7-7s-7 3.13-7 7 3.13 7 7 7c1.75 0 3.35-.65 4.58-1.71l5.59 5.59.7-.71zM10 16c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+      </button>
+    </form>
+    <div class="topo-dir">
+      <button class="pilula" id="btn-atualizar" title="Buscar vídeos novos agora (r)">
+        <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        <span>Atualizar</span>
+      </button>
+      <a class="pilula" href="#/canais" title="Adicionar canal">
+        <svg viewBox="0 0 24 24"><path d="M20 12h-8v8h-1v-8H3v-1h8V3h1v8h8v1z"/></svg>
+        <span>Canal</span>
+      </a>
+      <span class="sino" id="sino" title="Vídeos novos desde a última visita">
+        <svg viewBox="0 0 24 24"><path d="M10 20h4c0 1.1-.9 2-2 2s-2-.9-2-2zm10-2.65V19H4v-1.65l2-1.88v-5.15C6 7.4 7.56 5.1 10 4.34v-.38c0-1.42 1.49-2.5 2.99-1.76.65.32 1.01 1.03 1.01 1.76v.39c2.44.75 4 3.06 4 5.98v5.15l2 1.87z"/></svg>
+        <b id="sino-n" hidden></b>
+      </span>
+      <span class="avatar" aria-hidden="true"></span>
+    </div>
+  </header>
+
+  <nav class="lateral" id="lateral">
+    <div class="lat-grupo">
+      <a href="#/inicio" data-v="inicio"><svg viewBox="0 0 24 24"><path d="M4 21V10.08l8-6.96 8 6.96V21h-6v-6h-4v6H4z"/></svg>Início</a>
+      <a href="#/recentes" data-v="recentes"><svg viewBox="0 0 24 24"><path d="M10 18v-6l5 3-5 3zm7-15H7v1h10V3zm3 3H4v1h16V6zm2 3H2v12h20V9z"/></svg>Recentes</a>
+      <a href="#/continuar" data-v="continuar"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Continuar<span class="cont" id="n-continuar"></span></a>
+      <a href="#/depois" data-v="depois"><svg viewBox="0 0 24 24"><path d="M14.97 16.95 10 13.87V7h2v5.76l4.03 2.49-1.06 1.7zM12 3c-4.96 0-9 4.04-9 9s4.04 9 9 9 9-4.04 9-9-4.04-9-9-9m0-1c5.52 0 10 4.48 10 10s-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z"/></svg>Assistir depois<span class="cont" id="n-depois"></span></a>
+      <a href="#/historico" data-v="historico"><svg viewBox="0 0 24 24"><path d="M14.97 16.95 10 13.87V7h2v5.76l4.03 2.49-1.06 1.7zM22 12c0 5.51-4.49 10-10 10S2 17.51 2 12h1c0 4.96 4.04 9 9 9s9-4.04 9-9-4.04-9-9-9C8.81 3 5.92 4.64 4.28 7.38c-.11.18-.22.37-.31.56L3.94 8H8v1H1.96V3h1v4.74c.04-.09.07-.17.11-.25.11-.22.23-.42.35-.63C5.22 3.86 8.51 2 12 2c5.51 0 10 4.49 10 10z"/></svg>Histórico</a>
+      <a href="#/ocultos" data-v="ocultos"><svg viewBox="0 0 24 24"><path d="M12 6c3.79 0 7.17 2.13 8.82 5.5-.59 1.22-1.42 2.27-2.41 3.12l1.41 1.41c1.39-1.23 2.49-2.77 3.18-4.53C21.27 7.11 17 4 12 4c-1.27 0-2.49.2-3.64.57l1.65 1.65C10.66 6.09 11.32 6 12 6zm-1.07 1.14L13 9.21c.57.25 1.03.71 1.28 1.28l2.07 2.07c.08-.34.14-.7.14-1.07C16.5 9.01 14.48 7 12 7c-.37 0-.72.05-1.07.14zM2.01 3.87l2.68 2.68A11.738 11.738 0 0 0 1 11.5C2.73 15.89 7 19 12 19c1.52 0 2.98-.29 4.32-.82l3.42 3.42 1.41-1.41L3.42 2.45 2.01 3.87zm7.5 7.5 2.61 2.61c-.04.01-.08.02-.12.02a2.5 2.5 0 0 1-2.5-2.5c0-.05.01-.08.01-.13zm-3.4-3.4 1.75 1.75a4.6 4.6 0 0 0-.36 1.78 4.507 4.507 0 0 0 6.27 4.14l.98.98c-.88.24-1.8.38-2.75.38a9.77 9.77 0 0 1-8.82-5.5c.7-1.43 1.72-2.61 2.93-3.53z"/></svg>Ocultos</a>
+    </div>
+    <div class="lat-grupo">
+      <a href="#/canais" class="lat-titulo">Canais <svg viewBox="0 0 24 24"><path d="m9.4 18.4-.7-.7 5.6-5.6-5.7-5.7.7-.7 6.4 6.4-6.3 6.3z"/></svg></a>
+      <div id="lat-canais"></div>
+      <button class="lat-mais" id="lat-mais"><svg viewBox="0 0 24 24"><path d="m18 9.28-6.35 6.35-6.37-6.35.72-.71 5.64 5.65 5.65-5.65z"/></svg><span>Mostrar mais</span></button>
+    </div>
+    <div class="lat-grupo">
+      <span class="lat-titulo">Você</span>
+      <a href="#/canais" data-v="canais"><svg viewBox="0 0 24 24"><path d="M4 20h14v1H3V6h1v14zM6 3v15h15V3H6zm2.02 14c.36-2.13 1.93-4.1 5.48-4.1s5.12 1.97 5.48 4.1H8.02zM11 8.5a2.5 2.5 0 0 1 5 0 2.5 2.5 0 0 1-5 0zm3.21 3.43A3.507 3.507 0 0 0 17 8.5C17 6.57 15.43 5 13.5 5S10 6.57 10 8.5c0 1.69 1.2 3.1 2.79 3.43-3.48.26-5.4 2.42-5.78 5.07H7V4h13v13h-.01c-.38-2.65-2.31-4.81-5.78-5.07z"/></svg>Gerenciar canais</a>
+      <a href="#/importar" data-v="importar"><svg viewBox="0 0 24 24"><path d="M17 18v1H6v-1h11zm-.65-7.65-.71-.71L12 13.29V4h-1v9.29L7.35 9.65l-.71.71L11.5 15.21l4.85-4.86z"/></svg>Importar histórico</a>
+      <a href="#/ajustes" data-v="ajustes"><svg viewBox="0 0 24 24"><path d="M12 9.5c1.38 0 2.5 1.12 2.5 2.5s-1.12 2.5-2.5 2.5-2.5-1.12-2.5-2.5 1.12-2.5 2.5-2.5m0-1c-1.93 0-3.5 1.57-3.5 3.5s1.57 3.5 3.5 3.5 3.5-1.57 3.5-3.5-1.57-3.5-3.5-3.5zM13.22 3l.55 2.2.13.51.5.18c.61.23 1.19.56 1.72.98l.4.32.5-.14 2.17-.62 1.22 2.11-1.63 1.59-.37.36.08.51c.05.32.08.64.08.98s-.03.66-.08.98l-.08.51.37.36 1.63 1.59-1.22 2.11-2.17-.62-.5-.14-.4.32c-.53.43-1.11.76-1.72.98l-.5.18-.13.51-.55 2.24h-2.44l-.55-2.2-.13-.51-.5-.18c-.6-.23-1.18-.56-1.72-.99l-.4-.32-.5.14-2.17.62-1.21-2.12 1.63-1.59.37-.36-.08-.51c-.05-.32-.08-.65-.08-.98s.03-.66.08-.98l.08-.51-.37-.36L3.6 8.56l1.22-2.11 2.17.62.5.14.4-.32c.53-.44 1.11-.77 1.72-.99l.5-.18.13-.51.54-2.21h2.44M14 2h-4l-.74 2.96c-.73.27-1.4.66-2 1.14l-2.92-.83-2 3.46 2.19 2.13c-.06.37-.09.75-.09 1.14s.03.77.09 1.14l-2.19 2.13 2 3.46 2.92-.83c.6.48 1.27.87 2 1.14L10 22h4l.74-2.96c.73-.27 1.4-.66 2-1.14l2.92.83 2-3.46-2.19-2.13c.06-.37.09-.75.09-1.14s-.03-.77-.09-1.14l2.19-2.13-2-3.46-2.92.83c-.6-.48-1.27-.87-2-1.14L14 2z"/></svg>Ajustes</a>
+    </div>
+    <p class="lat-rodape" id="lat-status"></p>
+  </nav>
+  <div class="veu" id="veu"></div>
+
+  <main class="conteudo" id="conteudo">
+    <div class="centro" id="centro">
+      <h1 id="titulo-view">Para você</h1>
+      <div class="chips" id="chips"></div>
+      <div id="lista" class="lista"></div>
+      <div id="sentinela"></div>
+    </div>
+    <aside class="painel" id="painel">
+      <label class="painel-busca">
+        <svg viewBox="0 0 24 24"><path d="m20.87 20.17-5.59-5.59A6.96 6.96 0 0 0 17 10c0-3.87-3.13-7-7-7s-7 3.13-7 7 3.13 7 7 7c1.75 0 3.35-.65 4.58-1.71l5.59 5.59.7-.71zM10 16c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+        <input id="busca-painel" type="search" placeholder="Pesquise nesta lista">
+      </label>
+      <button class="painel-acao" id="acao-tocar"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Reproduzir esta lista</button>
+      <button class="painel-acao" id="acao-marcar-todos"><svg viewBox="0 0 24 24"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>Marcar visíveis como vistos</button>
+      <button class="painel-acao" id="acao-vistos"><svg viewBox="0 0 24 24"><path d="M12 6c3.79 0 7.17 2.13 8.82 5.5C19.17 14.87 15.79 17 12 17s-7.17-2.13-8.82-5.5C4.83 8.13 8.21 6 12 6m0-2C7 4 2.73 7.11 1 11.5 2.73 15.89 7 19 12 19s9.27-3.11 11-7.5C21.27 7.11 17 4 12 4zm0 5a2.5 2.5 0 0 1 0 5 2.5 2.5 0 0 1 0-5m0-2c-2.48 0-4.5 2.02-4.5 4.5S9.52 16 12 16s4.5-2.02 4.5-4.5S14.48 7 12 7z"/></svg><span id="txt-vistos">Mostrar vistos</span></button>
+      <button class="painel-acao" id="acao-shorts"><svg viewBox="0 0 24 24"><path d="M10 14.65v-5.3L15 12l-5 2.65zm7.77-4.33-1.2-.5L18 9.06c1.84-.96 2.53-3.23 1.56-5.06s-3.24-2.53-5.07-1.56L6 6.94c-1.29.68-2.07 2.04-2 3.49.07 1.42.93 2.67 2.22 3.25.03.01 1.2.5 1.2.5L6 14.93c-1.83.97-2.53 3.24-1.56 5.07.97 1.83 3.24 2.53 5.07 1.56l8.5-4.5c1.29-.68 2.06-2.04 1.99-3.49-.07-1.42-.94-2.68-2.23-3.25z"/></svg><span id="txt-shorts">Mostrar Shorts</span></button>
+      <button class="painel-acao" id="acao-layout"><svg viewBox="0 0 24 24"><path d="M2 4h9v7H2zm11 0h9v7h-9zM2 13h9v7H2zm11 0h9v7h-9z"/></svg><span id="txt-layout">Ver em grade</span></button>
+      <div class="painel-sub" id="painel-info"></div>
+      <div class="painel-sub atalhos">
+        <b>Atalhos</b>
+        <span><kbd>j</kbd>/<kbd>k</kbd> navegar · <kbd>Enter</kbd> assistir</span>
+        <span><kbd>v</kbd> visto · <kbd>d</kbd> depois · <kbd>x</kbd> ocultar</span>
+        <span><kbd>/</kbd> buscar · <kbd>r</kbd> atualizar · <kbd>n</kbd> próximo</span>
+      </div>
+    </aside>
+  </main>
+
+  <nav class="barra-baixo" id="barra-baixo">
+    <a href="#/inicio" data-v="inicio"><svg viewBox="0 0 24 24"><path d="M4 21V10.08l8-6.96 8 6.96V21h-6v-6h-4v6H4z"/></svg>Início</a>
+    <a href="#/recentes" data-v="recentes"><svg viewBox="0 0 24 24"><path d="M10 18v-6l5 3-5 3zm7-15H7v1h10V3zm3 3H4v1h16V6zm2 3H2v12h20V9z"/></svg>Recentes</a>
+    <a href="#/depois" data-v="depois"><svg viewBox="0 0 24 24"><path d="M14.97 16.95 10 13.87V7h2v5.76l4.03 2.49-1.06 1.7zM12 3c-4.96 0-9 4.04-9 9s4.04 9 9 9 9-4.04 9-9-4.04-9-9-9m0-1c5.52 0 10 4.48 10 10s-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z"/></svg>Depois</a>
+    <a href="#/historico" data-v="historico"><svg viewBox="0 0 24 24"><path d="M14.97 16.95 10 13.87V7h2v5.76l4.03 2.49-1.06 1.7zM22 12c0 5.51-4.49 10-10 10S2 17.51 2 12h1c0 4.96 4.04 9 9 9s9-4.04 9-9-4.04-9-9-9C8.81 3 5.92 4.64 4.28 7.38L3.94 8H8v1H1.96V3h1v4.74z"/></svg>Histórico</a>
+    <a href="#/canais" data-v="canais"><svg viewBox="0 0 24 24"><path d="M4 20h14v1H3V6h1v14zM6 3v15h15V3H6zm8.21 8.93A3.507 3.507 0 0 0 17 8.5C17 6.57 15.43 5 13.5 5S10 6.57 10 8.5c0 1.69 1.2 3.1 2.79 3.43-3.48.26-5.4 2.42-5.78 5.07h12.98c-.38-2.65-2.31-4.81-5.78-5.07z"/></svg>Canais</a>
+  </nav>
+
+  <div class="player" id="player" hidden>
+    <div class="player-caixa">
+      <div class="player-video"><div id="yt-alvo"></div></div>
+      <div class="player-lado">
+        <h2 id="pl-titulo"></h2>
+        <a id="pl-canal" class="pl-canal"></a>
+        <p id="pl-meta" class="pl-meta"></p>
+        <div class="pl-botoes">
+          <button class="pilula forte" id="pl-visto-prox">✓ Visto e próximo</button>
+          <button class="pilula" id="pl-depois">Assistir depois</button>
+          <a class="pilula" id="pl-yt" target="_blank" rel="noopener">Abrir no YouTube</a>
+          <button class="pilula" id="pl-fechar">Fechar</button>
+        </div>
+        <div class="pl-vel" id="pl-vel"></div>
+        <h3>A seguir</h3>
+        <div id="pl-fila" class="pl-fila"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="menu-flutuante" id="menu" hidden></div>
+  <div class="avisos" id="avisos"></div>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
