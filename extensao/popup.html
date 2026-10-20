@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icone-32.png" alt="" width="24" height="24">
+    <b>Timeline YT</b>
+  </header>
+
+  <form id="tela-entrar" hidden>
+    <p>Entre uma vez com a senha da sua timeline.</p>
+    <label>Endereço<input id="servidor" type="url" required></label>
+    <label>Senha<input id="senha" type="password" required autocomplete="current-password"></label>
+    <button class="forte">Entrar</button>
+    <p class="erro" id="erro-entrar"></p>
+  </form>
+
+  <main id="tela-principal" hidden>
+    <div class="numeros">
+      <a id="n-novos" target="_blank"><b>–</b><span>novos</span></a>
+      <a id="n-depois" target="_blank"><b>–</b><span>depois</span></a>
+      <a id="n-continuar" target="_blank"><b>–</b><span>continuar</span></a>
+    </div>
+    <a class="botao forte" id="abrir" target="_blank">Abrir a timeline</a>
+
+    <h2>Importar desta aba</h2>
+    <button class="botao" id="importar">Enviar o que está na página</button>
+    <button class="botao" id="importar-tudo">Rolar a página toda e enviar</button>
+    <p class="dica">Use em youtube.com/feed/history (histórico) e youtube.com/feed/channels (inscrições).</p>
+    <p class="resultado" id="resultado"></p>
+
+    <h2>No YouTube</h2>
+    <label class="chave"><span>Botões + ⏱ − nas miniaturas</span><input type="checkbox" id="botoes"></label>
+    <label class="chave"><span>Selo do que já está na timeline</span><input type="checkbox" id="marcarMiniaturas"></label>
+    <label class="chave"><span>Assistiu aqui? Conta como visto</span><input type="checkbox" id="autoVisto"></label>
+
+    <h2>Atalhos (no vídeo aberto)</h2>
+    <p class="dica"><kbd>Alt+Shift+M</kbd> mais disso · <kbd>Alt+Shift+D</kbd> depois · <kbd>Alt+Shift+X</kbd> menos disso.
+      Botão direito em qualquer link de vídeo (inclusive fora do YouTube) também funciona.</p>
+
+    <button class="link" id="sair">Sair</button>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

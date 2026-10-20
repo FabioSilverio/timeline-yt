@@ -49,13 +49,16 @@ function assinar(valor) {
   return valor + "." + crypto.createHmac("sha256", SEGREDO).update(valor).digest("base64url");
 }
 
+// Sessão: cookie (site) ou "Authorization: Bearer" (extensão do Chrome); o mesmo token assinado
 function sessaoValida(req) {
-  const m = (req.headers.cookie || "").match(new RegExp(`${COOKIE}=([^;]+)`));
-  if (!m) return false;
-  const [valor] = m[1].split(".");
+  const token =
+    (req.headers.cookie || "").match(new RegExp(`${COOKIE}=([^;]+)`))?.[1] ||
+    (req.headers.authorization || "").match(/^Bearer\s+(\S+)$/)?.[1];
+  if (!token) return false;
+  const [valor] = token.split(".");
   const esperado = Buffer.from(assinar(valor));
-  const recebido = Buffer.from(m[1]);
-  return esperado.length === recebido.length && crypto.timingSafeEqual(esperado, recebido) ? m[1] : false;
+  const recebido = Buffer.from(token);
+  return esperado.length === recebido.length && crypto.timingSafeEqual(esperado, recebido) ? token : false;
 }
 
 function cookieSessao(req, token) {
@@ -199,10 +202,31 @@ function payloadTimeline() {
       .slice(0, 40)
       .map(([w]) => w),
     importacoes: e.importacoes.slice(0, 5),
+    sinais: e.sinais.slice(0, 40),
     visitaAnterior: e.visitaAnterior,
     categorias: CATEGORIAS,
     status: motor.status,
     pastaDados: armazem.dir,
+  };
+}
+
+// Contagem para o selo da extensão: vídeos novos desde a última visita ao site
+function resumo() {
+  const e = E();
+  let novos = 0;
+  for (const v of Object.values(armazem.videos)) {
+    const c = e.canais[v.canal];
+    if (!c || c.silenciado || e.vistos[v.id] || e.ocultos[v.id]) continue;
+    if (v.short && e.ajustes.esconderShorts) continue;
+    if ((v.visto1 || 0) > (e.visitaAnterior || 0) && Date.parse(v.publicado) > (e.visitaAnterior || 0) - 6 * 3600e3) novos++;
+  }
+  return {
+    novos,
+    depois: Object.keys(e.depois).length,
+    continuar: Object.keys(e.progresso).length,
+    canais: Object.keys(e.canais).length,
+    ultima: motor.status.ultima,
+    rodando: motor.status.rodando,
   };
 }
 
@@ -263,6 +287,16 @@ async function api(req, res, rota) {
   const metodo = req.method;
   if (rota === "/api/timeline" && metodo === "GET") return enviar(req, res, 200, payloadTimeline());
   if (rota === "/api/status" && metodo === "GET") return enviar(req, res, 200, motor.status);
+  if (rota === "/api/resumo" && metodo === "GET") return enviar(req, res, 200, resumo());
+  if (rota === "/api/estado-ids" && metodo === "GET") {
+    const e = E();
+    const out = {};
+    for (const id of (new URL(req.url, "http://x").searchParams.get("ids") || "").split(",").slice(0, 300)) {
+      const st = e.vistos[id] ? "visto" : e.depois[id] ? "depois" : e.ocultos[id] ? "oculto" : e.marcados[id] || null;
+      if (st) out[id] = st;
+    }
+    return enviar(req, res, 200, out);
+  }
   if (rota === "/api/backup" && metodo === "GET") {
     armazem.salvarAgora();
     return enviar(req, res, 200, JSON.stringify({ estado: E() }), "application/json; charset=utf-8", {
@@ -319,6 +353,12 @@ async function api(req, res, rota) {
       armazem.salvar();
       return enviar(req, res, 200, { ok: true });
     }
+    case "/api/sinal": {
+      const id = String(corpo.id || "");
+      if (!/^[\w-]{11}$/.test(id)) return enviar(req, res, 400, { erro: "id de vídeo inválido" });
+      const r = await motor.sinal(corpo.tipo, id, corpo.dica || {});
+      return enviar(req, res, 200, { ok: true, titulo: r.video.titulo, canal: r.canal?.titulo || "" });
+    }
     case "/api/importar": {
       const r = motor.importar(corpo.tipo, corpo.conteudo);
       return enviar(req, res, 200, { ok: true, ...r });
@@ -372,14 +412,14 @@ const servidor = http.createServer(async (req, res) => {
       const ip = ipDe(req);
       const t = tentativas.get(ip) || { n: 0, ate: 0 };
       if (t.ate > Date.now()) return enviar(req, res, 429, { erro: "Muitas tentativas. Espere alguns minutos." });
-      const { senha } = await lerCorpo(req, 10_000);
+      const { senha, token: querToken } = await lerCorpo(req, 10_000);
       const a = Buffer.from(String(senha || ""));
       const b = Buffer.from(SENHA);
       if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
         tentativas.delete(ip);
-        return enviar(req, res, 200, { ok: true }, undefined, {
-          "Set-Cookie": cookieSessao(req, assinar(crypto.randomBytes(12).toString("base64url"))),
-        });
+        const token = assinar(crypto.randomBytes(12).toString("base64url"));
+        if (querToken) return enviar(req, res, 200, { ok: true, token });
+        return enviar(req, res, 200, { ok: true }, undefined, { "Set-Cookie": cookieSessao(req, token) });
       }
       t.n++;
       if (t.n >= 5) Object.assign(t, { n: 0, ate: Date.now() + 10 * 60e3 });

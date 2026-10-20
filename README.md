@@ -29,6 +29,23 @@ próprio da Cloudflare em **https://yt.faaretz.site** (separado do túnel dos ou
 - Atalhos: `j`/`k` navegar, `Enter` assistir, `v` visto, `d` depois, `x` ocultar, `/` buscar, `r` atualizar, `n` próximo.
 - Senha de acesso (o site fica público pelo túnel). Você entra uma vez em cada aparelho e fica logado (a sessão é renovada a cada visita). Funciona no celular (dá para "adicionar à tela inicial").
 
+## Extensão do Chrome (`extensao/`)
+
+- Botões **+** (mais disso), **⏱** (assistir depois) e **−** (menos disso) em cada miniatura do YouTube
+  (início, busca, recomendados, canais) e uma barra embaixo do vídeo aberto. "Mais disso" aumenta o peso
+  do canal e dos assuntos do título; se o canal ainda não está na lista, ele entra na hora.
+- O que você assiste no YouTube (70% do vídeo ou 5 minutos, sem contar anúncios) vira **visto** na timeline
+  e ensina o algoritmo, sem precisar importar nada.
+- Selo nas miniaturas do que já está visto ou salvo na timeline.
+- Popup: novos / depois / continuar, abrir a timeline, importar a aba atual (com opção de rolar a página
+  inteira do histórico ou das inscrições) e preferências.
+- Atalhos no vídeo aberto: `Alt+Shift+M` mais, `Alt+Shift+D` depois, `Alt+Shift+X` menos.
+  Botão direito em qualquer link de vídeo, em qualquer site, também sinaliza.
+- Ícone com o número de vídeos novos (confere a cada 15 min).
+
+Instalar: `chrome://extensions` → ligar **Modo do desenvolvedor** → **Carregar sem compactação** →
+pasta `D:\TimelineYT\app\extensao`. Clique no ícone e entre com o endereço e a senha (uma vez).
+
 ## Instalação no PC (Windows)
 
 1. No PowerShell (precisa do Git e do Node 20+):

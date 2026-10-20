@@ -50,6 +50,11 @@ globalThis.fetch = async (url, opts) => {
     return ok(pagCanal(id, nomes.get(id)));
   }
   if (u.pathname.startsWith("/channel/")) { const id = u.pathname.split("/")[2]; return ok(pagCanal(id, nomes.get(id) || id)); }
-  if (u.pathname === "/watch") { const v = u.searchParams.get("v"); return ok(`"lengthSeconds":"${(hash(v) % 5400) + 60}"`); }
+  if (u.pathname === "/watch") {
+    const v = u.searchParams.get("v");
+    const canal = idCanal("Canal Externo " + (hash(v) % 3));
+    nomes.set(canal, "Canal Externo " + (hash(v) % 3));
+    return ok(`"videoDetails":{"videoId":"${v}","title":"Vídeo externo \\"${v}\\" sobre debate","lengthSeconds":"${(hash(v) % 5400) + 60}","channelId":"${canal}","author":"Canal Externo ${hash(v) % 3}","viewCount":"4321"},"publishDate":"${new Date(Date.now() - 3600e3).toISOString()}"`);
+  }
   return new Response("", { status: 404 });
 };

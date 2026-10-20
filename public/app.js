@@ -856,7 +856,21 @@ function renderImportar() {
     h(
       "div",
       { class: "cartao" },
-      h("h2", {}, "1. Pelo próprio YouTube (mais rápido)"),
+      h("h2", {}, "Extensão do Chrome (recomendado)"),
+      h("p", {}, "Com ela, o que você assiste no YouTube entra sozinho no histórico da timeline, e cada miniatura ganha os botões + (mais disso), ⏱ (depois) e − (menos disso). O popup também importa o histórico e as inscrições."),
+      h(
+        "ol",
+        {},
+        h("li", {}, "No PC, rode windows\\atualizar.ps1 (ou git pull) para ter a pasta D:\\TimelineYT\\app\\extensao."),
+        h("li", {}, "Abra chrome://extensions, ligue o Modo do desenvolvedor e clique em Carregar sem compactação. Escolha a pasta extensao."),
+        h("li", {}, `Clique no ícone da Timeline YT na barra do Chrome e entre com ${location.origin} e a sua senha. É uma vez só.`),
+        h("li", {}, "Abra youtube.com/feed/history, clique no ícone e em Rolar a página toda e enviar. Repita em youtube.com/feed/channels."),
+      ),
+    ),
+    h(
+      "div",
+      { class: "cartao" },
+      h("h2", {}, "1. Pelo favorito (sem extensão)"),
       h(
         "ol",
         {},
@@ -903,7 +917,7 @@ function renderImportar() {
       resultado,
     ),
   );
-  if (D.importacoes.length) {
+  if (D.importacoes?.length) {
     box.append(h("div", { class: "sub-titulo" }, "Últimas importações"));
     for (const i of D.importacoes) box.append(h("p", { class: "motivo" }, `${new Date(i.quando).toLocaleString("pt-BR")} · ${i.tipo} · ${i.itens} vídeos · ${i.novos} canais novos`));
   }
@@ -976,6 +990,23 @@ function renderAjustes() {
   box.append(
     editorLista("Assuntos que você quer ver mais", "Vídeos com essas palavras no título sobem na timeline. Ex.: Nikolas, debate, STF, eleição.", D.interesses, "interesses"),
     editorLista("Palavras bloqueadas", "Vídeos com essas palavras no título não aparecem.", D.bloqueios, "bloqueios"),
+    h(
+      "div",
+      { class: "cartao" },
+      h("h2", {}, "Sinais que você deu"),
+      h("p", {}, D.sinais.length ? "Os mais recentes, pela extensão do Chrome:" : "Nenhum ainda. Use os botões + e − da extensão nas miniaturas do YouTube."),
+      ...D.sinais.slice(0, 20).map((x) =>
+        h(
+          "p",
+          { class: "motivo" },
+          { mais: "+ Mais disso", menos: "− Menos disso", depois: "⏱ Depois", "tirar-depois": "⏱ Tirado de depois" }[x.tipo] || x.tipo,
+          " · ",
+          h("a", { href: linkYT(x.id), target: "_blank", rel: "noopener" }, x.titulo || x.id),
+          D.canais[x.canal] ? ` · ${D.canais[x.canal].titulo}` : "",
+          ` · ${ha(x.quando)}`,
+        ),
+      ),
+    ),
     h(
       "div",
       { class: "cartao" },

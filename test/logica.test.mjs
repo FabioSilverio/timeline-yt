@@ -110,3 +110,14 @@ test("intercala canais repetidos", () => {
   const r = intercalar([{ canal: "a" }, { canal: "a" }, { canal: "a" }, { canal: "b" }, { canal: "c" }], 2);
   assert.deepEqual(r.map((x) => x.canal), ["a", "b", "c", "a", "a"]);
 });
+
+test("lê título, canal e data da página do vídeo", () => {
+  const html = `..."videoDetails":{"videoId":"AAAAAAAAAAA","title":"Ele \\"destroys\\" o debate","lengthSeconds":"125","channelId":"UC1234567890123456789012","author":"Benny","viewCount":"999"},"publishDate":"2026-10-19T07:00:00-07:00"`;
+  const d = lerPaginaVideo(html);
+  assert.equal(d.titulo, 'Ele "destroys" o debate');
+  assert.equal(d.canal, "UC1234567890123456789012");
+  assert.equal(d.autor, "Benny");
+  assert.equal(d.views, 999);
+  assert.equal(d.duracao, 125);
+  assert.equal(d.publicado, "2026-10-19T14:00:00.000Z");
+});

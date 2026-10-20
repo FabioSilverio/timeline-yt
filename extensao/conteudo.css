@@ -1,0 +1,50 @@
+.tl-host { position: relative !important; }
+
+.tl-barra {
+  position: absolute; top: 6px; left: 6px; z-index: 50; display: flex; gap: 4px;
+  opacity: 0; transition: opacity .15s; pointer-events: none;
+}
+.tl-host:hover > .tl-barra, .tl-barra:focus-within { opacity: 1; pointer-events: auto; }
+.tl-btn {
+  width: 30px; height: 30px; border-radius: 6px; border: 0; cursor: pointer;
+  background: rgba(15, 15, 15, .88); color: #fff; font: 600 17px/30px Roboto, Arial, sans-serif; padding: 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
+.tl-btn:hover { background: #000; }
+.tl-btn.tl-mais:hover, .tl-st-mais .tl-btn.tl-mais { color: #7ee2a8; }
+.tl-btn.tl-depois:hover, .tl-st-depois .tl-btn.tl-depois { color: #ffd600; }
+.tl-btn.tl-menos:hover { color: #ff8a80; }
+
+.tl-selo:empty { display: none; }
+.tl-selo {
+  position: absolute; left: 6px; bottom: 6px; z-index: 40; pointer-events: none;
+  background: rgba(15, 15, 15, .88); color: #fff; font: 500 11px/1 Roboto, Arial, sans-serif;
+  padding: 4px 6px; border-radius: 4px;
+}
+.tl-st-visto > .tl-selo { color: #7ee2a8; }
+.tl-st-depois > .tl-selo { color: #ffd600; }
+.tl-st-oculto, .tl-st-menos { opacity: .45; }
+
+#tl-barra-video {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px;
+  font: 500 14px Roboto, Arial, sans-serif; color: var(--yt-spec-text-primary, #f1f1f1);
+}
+#tl-barra-video .tl-marca {
+  color: #ff4e45; font-weight: 700; margin-right: 4px; font-size: 13px; letter-spacing: .2px;
+}
+#tl-barra-video .tl-btn {
+  width: auto; height: 36px; padding: 0 16px; border-radius: 18px; font: 500 14px/36px Roboto, Arial, sans-serif;
+  background: var(--yt-spec-badge-chip-background, rgba(255,255,255,.1)); color: var(--yt-spec-text-primary, #f1f1f1); box-shadow: none;
+}
+#tl-barra-video .tl-btn:hover { background: var(--yt-spec-10-percent-layer, rgba(255,255,255,.2)); }
+#tl-barra-video .tl-btn.tl-ativo { background: #f1f1f1; color: #0f0f0f; }
+#tl-barra-video .tl-estado { color: var(--yt-spec-text-secondary, #aaa); font-size: 12px; font-weight: 400; }
+
+#tl-avisos { position: fixed; left: 24px; bottom: 24px; z-index: 99999; display: grid; gap: 8px; }
+.tl-aviso {
+  background: #f1f1f1; color: #0f0f0f; border-radius: 8px; padding: 12px 16px; max-width: 460px;
+  font: 400 14px/1.4 Roboto, Arial, sans-serif; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+.tl-aviso b { color: #cc0000; }
+.tl-aviso.tl-erro { background: #cc0000; color: #fff; }
+.tl-aviso.tl-erro b { color: #fff; }
