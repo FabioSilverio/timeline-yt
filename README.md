@@ -31,9 +31,9 @@ próprio da Cloudflare em **https://yt.faaretz.site** (separado do túnel dos ou
 
 ## Instalação no PC (Windows)
 
-1. Copie esta pasta para **D:\TimelineYT\app**.
-2. No PowerShell:
+1. No PowerShell (precisa do Git e do Node 20+):
    ```powershell
+   git clone https://github.com/FabioSilverio/timeline-yt D:\TimelineYT\app
    powershell -ExecutionPolicy Bypass -File D:\TimelineYT\app\windows\instalar.ps1
    ```
    O script:
@@ -44,8 +44,9 @@ próprio da Cloudflare em **https://yt.faaretz.site** (separado do túnel dos ou
    - registra a tarefa **TimelineYT**, que sobe tudo escondido quando você entra no Windows e reinicia
      se cair.
    Opções: `-Dominio outro.faaretz.site`, `-Porta 3220`, `-SemTunel` (só acesso local).
-3. Abra http://127.0.0.1:3220, entre com a senha e vá em **Importar histórico**.
+2. Abra http://127.0.0.1:3220, entre com a senha e vá em **Importar histórico**.
 
+Para atualizar: `windows\atualizar.ps1` (puxa do GitHub e reinicia o servidor).
 Para parar: `windows\parar.ps1` (com `-Remover` tira também a tarefa agendada). Os dados ficam.
 
 Nada é gravado no C:, exceto a tarefa agendada do Windows e o login da Cloudflare que já existia
