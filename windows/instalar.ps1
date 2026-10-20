@@ -2,12 +2,24 @@
 # Rode no PowerShell (como seu usuário, não precisa ser administrador):
 #   powershell -ExecutionPolicy Bypass -File D:\TimelineYT\app\windows\instalar.ps1
 # Opções: -Dominio yt.faaretz.site   -SemTunel   -Porta 3220
+#          -SobrescreverDns  (aponta o domínio para este túnel mesmo se o registro já existir)
+# Pode rodar de novo quantas vezes quiser: o que já está feito é mantido.
 param(
   [string]$Dominio = "yt.faaretz.site",
   [int]$Porta = 3220,
-  [switch]$SemTunel
+  [switch]$SemTunel,
+  [switch]$SobrescreverDns
 )
-$ErrorActionPreference = "Stop"
+# "Continue": o cloudflared escreve avisos comuns na saída de erro, e com "Stop" o
+# PowerShell 5 trata isso como falha. Os erros de verdade são checados à mão abaixo.
+$ErrorActionPreference = "Continue"
+
+# Roda o cloudflared sempre com a config do Timeline (nunca a padrão do .cloudflared,
+# que é do túnel dos outros projetos) e devolve a saída como texto + código de saída.
+function Cloudflared-Timeline([string[]] $argumentos) {
+  $saida = & $Cloudflared tunnel --config $ConfigTunel @argumentos 2>&1 | ForEach-Object { "$_" }
+  return @{ texto = ($saida -join "`n"); codigo = $LASTEXITCODE }
+}
 
 if (-not (Test-Path "D:\")) { throw "Não achei o disco D:. Esta instalação guarda tudo no D:\TimelineYT." }
 $Base = "D:\TimelineYT"
@@ -51,28 +63,55 @@ if (-not $SemTunel) {
     Write-Warning "Falta o login da Cloudflare (cert.pem). Rode: & '$Cloudflared' tunnel login   e depois este script de novo."
   } else {
     $Credenciais = Join-Path $PastaTunel "timeline-yt.json"
-    $lista = & $Cloudflared tunnel list --output json | ConvertFrom-Json
-    $tunel = $lista | Where-Object { $_.name -eq "timeline-yt" } | Select-Object -First 1
-    if (-not $tunel) {
+    $ConfigTunel = Join-Path $PastaTunel "config.yml"
+    $MarcaDns = Join-Path $PastaTunel "dns-ok.txt"
+    # Config mínima só para os comandos de gestão não lerem a config padrão
+    if (-not (Test-Path $ConfigTunel)) { Set-Content -LiteralPath $ConfigTunel -Value "credentials-file: $Credenciais" -Encoding ASCII }
+
+    $tunel = (Cloudflared-Timeline @("list", "--output", "json", "--name", "timeline-yt")).texto |
+      Select-String -Pattern '"id":\s*"([0-9a-f-]{36})"' | Select-Object -First 1
+    $tunelId = if ($tunel) { $tunel.Matches[0].Groups[1].Value } else { $null }
+    if (-not $tunelId) {
       Write-Host "Criando o túnel timeline-yt..."
-      & $Cloudflared tunnel create --credentials-file $Credenciais timeline-yt | Out-Host
-      $lista = & $Cloudflared tunnel list --output json | ConvertFrom-Json
-      $tunel = $lista | Where-Object { $_.name -eq "timeline-yt" } | Select-Object -First 1
+      $r = Cloudflared-Timeline @("create", "--credentials-file", $Credenciais, "timeline-yt")
+      Write-Host $r.texto
+      $m = [regex]::Match($r.texto, "with id ([0-9a-f-]{36})")
+      if ($m.Success) { $tunelId = $m.Groups[1].Value }
     }
-    if (-not (Test-Path $Credenciais)) {
+
+    if (-not $tunelId) {
+      Write-Warning "Não consegui criar nem achar o túnel timeline-yt. Sigo sem túnel (só acesso local)."
+    } elseif (-not (Test-Path $Credenciais)) {
       Write-Warning "O túnel timeline-yt existe mas a credencial não está em $Credenciais. Apague-o com: & '$Cloudflared' tunnel delete timeline-yt   e rode este script de novo."
     } else {
+      Write-Host "Túnel timeline-yt: $tunelId"
       $config = @"
-tunnel: $($tunel.id)
+tunnel: $tunelId
 credentials-file: $Credenciais
 ingress:
   - hostname: $Dominio
     service: http://127.0.0.1:$Porta
   - service: http_status:404
 "@
-      Set-Content -LiteralPath (Join-Path $PastaTunel "config.yml") -Value $config -Encoding ASCII
-      Write-Host "Apontando $Dominio para o túnel..."
-      & $Cloudflared tunnel route dns timeline-yt $Dominio 2>&1 | Out-Host
+      Set-Content -LiteralPath $ConfigTunel -Value $config -Encoding ASCII
+
+      $jaFeito = (Test-Path $MarcaDns) -and ((Get-Content -LiteralPath $MarcaDns -Raw).Trim() -eq "$Dominio $tunelId")
+      if ($jaFeito -and -not $SobrescreverDns) {
+        Write-Host "$Dominio já aponta para o túnel timeline-yt."
+      } else {
+        Write-Host "Apontando $Dominio para o túnel timeline-yt..."
+        $argsDns = @("route", "dns")
+        if ($SobrescreverDns) { $argsDns += "--overwrite-dns" }
+        $r = Cloudflared-Timeline ($argsDns + @($tunelId, $Dominio))
+        Write-Host $r.texto
+        if ($r.texto -match [regex]::Escape($tunelId)) {
+          Set-Content -LiteralPath $MarcaDns -Value "$Dominio $tunelId" -Encoding ASCII
+        } elseif ($r.texto -match "already") {
+          Write-Warning "$Dominio já existe no DNS apontando para outra coisa. Se foi criado por este instalador, rode de novo com -SobrescreverDns."
+        } else {
+          Write-Warning "Não consegui confirmar o DNS de $Dominio (veja a mensagem acima)."
+        }
+      }
       $TunelAtivo = $true
     }
   }

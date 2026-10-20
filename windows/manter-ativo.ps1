@@ -36,7 +36,7 @@ while ($true) {
       Where-Object { $_.CommandLine -like "*TimelineYT*" }
     if (-not $rodando) {
       $log = Join-Path $cfg.dados "logs\tunel.log"
-      Iniciar-Escondido $cfg.cloudflared "tunnel --config `"$($cfg.configTunel)`" --logfile `"$log`" run timeline-yt" $null
+      Iniciar-Escondido $cfg.cloudflared "tunnel --config `"$($cfg.configTunel)`" --logfile `"$log`" run" $null
     }
   }
   Start-Sleep -Seconds 20
