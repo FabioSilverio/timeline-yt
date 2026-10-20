@@ -148,7 +148,8 @@ function servirArquivo(req, res, arquivo) {
   fs.readFile(arquivo, (err, dados) => {
     if (err) return enviar(req, res, 404, "não encontrado", "text/plain; charset=utf-8");
     enviar(req, res, 200, dados, TIPOS[ext] || "application/octet-stream", {
-      "Cache-Control": ext === ".html" ? "no-store" : "public, max-age=300",
+      // html, js e css sempre conferidos: depois de uma atualização ninguém fica com versão misturada
+      "Cache-Control": [".html", ".js", ".mjs", ".css", ".webmanifest"].includes(ext) ? "no-cache" : "public, max-age=3600",
     });
   });
 }

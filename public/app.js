@@ -1,7 +1,23 @@
 // Timeline — interface. O servidor manda tudo em /api/timeline (com a nota de cada vídeo);
-// aqui as listas são filtradas, agrupadas por assunto e diversificadas (ordenar.mjs).
+// aqui as listas são filtradas, agrupadas por assunto e diversificadas (ordenar.js).
 
-import { agrupar, diversificar } from "./ordenar.mjs";
+import { agrupar, diversificar } from "./ordenar.js";
+
+// Se algo quebrar, mostra o erro na tela em vez de deixar a página vazia
+function mostrarErro(msg) {
+  const box = document.getElementById("lista");
+  if (!box || box.dataset.erro) return;
+  box.dataset.erro = "1";
+  const el = document.createElement("div");
+  el.className = "vazio";
+  el.innerHTML = '<span class="emoji">⚠️</span><b>Algo deu errado ao montar a tela</b>';
+  const p = document.createElement("p");
+  p.textContent = `${msg} — recarregue a página (Ctrl+Shift+R). Se continuar, mande um print disto.`;
+  el.append(p);
+  box.replaceChildren(el);
+}
+addEventListener("error", (e) => mostrarErro(e.message));
+addEventListener("unhandledrejection", (e) => mostrarErro(e.reason?.message || String(e.reason)));
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -1484,6 +1500,10 @@ $("#btn-atualizar").onclick = async () => {
 async function carregar(manter) {
   const y = scrollY;
   D = await api("/api/timeline");
+  // campos que um servidor de versão anterior pode não mandar
+  for (const k of ["sinais", "importacoes", "termos", "interesses", "bloqueios", "pendentes"]) D[k] ||= [];
+  for (const k of ["vistos", "depois", "ocultos", "progresso", "canais", "categorias"]) D[k] ||= {};
+  D.status ||= {};
   D.geracao = Date.now();
   render({ manter });
   if (manter) scrollTo(0, y);

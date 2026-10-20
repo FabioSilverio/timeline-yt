@@ -123,7 +123,7 @@ test("lê título, canal e data da página do vídeo", () => {
 });
 
 test("feed: agrupa o mesmo assunto e não empilha tema nem canal", async () => {
-  const { agrupar, diversificar } = await import("../public/ordenar.mjs");
+  const { agrupar, diversificar } = await import("../public/ordenar.js");
   const agora = Date.parse("2026-10-20T12:00:00Z");
   const v = (id, canal, chaves, nota, extra = {}) => ({ id, canal, chaves, nota, publicado: new Date(agora - 3600e3).toISOString(), ...extra });
   const lista = [
