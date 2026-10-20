@@ -1,7 +1,7 @@
 // Timeline — interface. O servidor manda tudo em /api/timeline (com a nota de cada vídeo);
 // aqui as listas são filtradas, agrupadas por assunto e diversificadas (ordenar.js).
 
-import { agrupar, diversificar } from "./ordenar.js";
+import { agrupar, diversificar } from "./ordenar.js?v=__V__";
 
 // Se algo quebrar, mostra o erro na tela em vez de deixar a página vazia
 function mostrarErro(msg) {

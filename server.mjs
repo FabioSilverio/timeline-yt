@@ -144,10 +144,15 @@ function lerCorpo(req, limite = 80 * 1024 * 1024) {
   });
 }
 
+// "__V__" nos arquivos da interface vira um número que muda a cada reinício do servidor:
+// assim navegador e Cloudflare nunca usam um app.js velho com um index.html novo.
+const VERSAO_ARQUIVOS = String(Date.now());
+
 function servirArquivo(req, res, arquivo) {
   const ext = path.extname(arquivo);
   fs.readFile(arquivo, (err, dados) => {
     if (err) return enviar(req, res, 404, "não encontrado", "text/plain; charset=utf-8");
+    if (ext === ".html" || ext === ".js") dados = Buffer.from(dados.toString("utf8").replaceAll("__V__", VERSAO_ARQUIVOS));
     enviar(req, res, 200, dados, TIPOS[ext] || "application/octet-stream", {
       // html, js e css sempre conferidos: depois de uma atualização ninguém fica com versão misturada
       "Cache-Control": [".html", ".js", ".mjs", ".css", ".webmanifest"].includes(ext) ? "no-cache" : "public, max-age=3600",
