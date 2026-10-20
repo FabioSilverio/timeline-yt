@@ -181,6 +181,7 @@ function payloadTimeline() {
     bloqueios: e.bloqueios,
     pesosCategoria: e.ajustes.pesosCategoria,
     exibicoes: e.exibicoes,
+    pesoProgramas: e.ajustes.programas === "normal" ? 1 : 0.15,
     agora,
   };
   const videos = montarTimeline(candidatos, ctx).map((v) => ({
@@ -195,6 +196,7 @@ function payloadTimeline() {
     descricao: v.descricao?.slice(0, 240),
     chaves: [...new Set(palavras(v.titulo))].slice(0, 12),
     explorar: semInteracao(v.canal),
+    exib: e.exibicoes[v.id]?.n || 0,
     nota: Math.round(v.nota * 1000) / 1000,
     tags: v.tags,
     motivo: v.motivo,
@@ -398,6 +400,7 @@ async function api(req, res, rota) {
           if (typeof a[k] === "boolean") e.ajustes[k] = a[k];
         if (Number.isFinite(a.intervaloMin)) e.ajustes.intervaloMin = Math.max(5, Math.min(240, a.intervaloMin));
         if (Number.isFinite(a.diasMax)) e.ajustes.diasMax = Math.max(2, Math.min(60, a.diasMax));
+        if (["esconder", "menos", "normal"].includes(a.programas)) e.ajustes.programas = a.programas;
         if (Number.isFinite(a.velocidade)) e.ajustes.velocidade = Math.max(0.25, Math.min(2, a.velocidade));
         if (a.pesosCategoria)
           for (const [k, v] of Object.entries(a.pesosCategoria))

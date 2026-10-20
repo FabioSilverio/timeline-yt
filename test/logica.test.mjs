@@ -86,7 +86,14 @@ test("etiquetas e ranking", () => {
     UCb: { id: "UCb", categoria: "podcasts", origem: "semelhante", peso: 0 },
     UCc: { id: "UCc", categoria: "noticias", origem: "semelhante", silenciado: true },
   };
-  assert.deepEqual(etiquetas({ titulo: "Fulano x Ciclano", duracao: 600 }, canais.UCa).sort(), ["curto", "debate", "politica"]);
+  assert.deepEqual(etiquetas({ titulo: "Fulano x Ciclano", duracao: 600 }, canais.UCa).sort(), ["corte", "curto", "debate", "politica"]);
+  // programa completo de TV x corte do mesmo canal
+  const tv = { id: "UCt", categoria: "noticias" };
+  assert.ok(etiquetas({ titulo: "OS PINGOS NOS IS - 21/10/26" }, tv).includes("programa"));
+  assert.ok(etiquetas({ titulo: "Jornal da Oeste segunda edição", duracao: 6500 }, tv).includes("programa"));
+  assert.ok(!etiquetas({ titulo: "Ministro rebate deputado ao vivo", duracao: 480 }, tv).includes("programa"));
+  assert.ok(etiquetas({ titulo: "Ministro rebate deputado", duracao: 480 }, tv).includes("corte"));
+  assert.ok(!etiquetas({ titulo: "Paulo Figueiredo Show - Ep. 324", duracao: 5600 }, { categoria: "politica" }).includes("programa"));
   assert.ok(etiquetas({ titulo: "Ep. 324", duracao: 5000 }, canais.UCb).includes("podcast"));
 
   const agora = Date.parse("2026-10-20T12:00:00Z");
@@ -101,6 +108,13 @@ test("etiquetas e ranking", () => {
     canais, stats: {}, termos: {}, interesses: ["nikolas"], pesosCategoria: {}, agora,
   });
   assert.equal(comInteresse[0].id, "1");
+
+  // programa completo despenca; vídeo exibido várias vezes sem clique também
+  const ctxB = { canais: { ...canais, UCt: { id: "UCt", categoria: "noticias", origem: "historico" } }, stats: {}, agora };
+  const [corte, programa] = [v("p1", "UCt", 1, "Ministro rebate"), v("p2", "UCt", 1, "Jornal da noite 20/10/2026")].map((x) => ({ ...x, duracao: x.id === "p1" ? 400 : 7000 }));
+  assert.deepEqual(montarTimeline([programa, corte], ctxB).map((x) => x.id), ["p1", "p2"]);
+  const cansado = montarTimeline([v("x1", "UCa", 1, "um"), v("x2", "UCa", 1, "dois")], { ...ctxB, exibicoes: { x1: { n: 3 } } });
+  assert.equal(cansado[0].id, "x2");
 
   const bloqueado = montarTimeline([v("1", "UCa", 1, "BBB 26")], { canais, stats: {}, bloqueios: ["bbb"], agora });
   assert.equal(bloqueado.length, 0);

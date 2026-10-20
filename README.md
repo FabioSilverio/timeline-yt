@@ -17,7 +17,11 @@ próprio da Cloudflare em **https://yt.faaretz.site** (separado do túnel dos ou
   - **agrupa o mesmo assunto**: a mesma notícia em vários canais vira um card só, com "+3 sobre isso";
   - **diversifica**: desconta o que é parecido com o que acabou de aparecer, evita canal repetido e tema
     saturado (o mesmo termo em 3 dos últimos 10);
-  - **cansaço**: o que apareceu na tela em várias visitas e você passou direto vai perdendo força;
+  - **cansaço**: o que apareceu na tela em várias visitas e você passou direto perde força rápido, e
+    depois de 3 visitas sai do Agora (continua em Recentes);
+  - **programas completos de TV** (jornais inteiros, lives, edições com data no título) ficam fora do
+    feed por padrão, e os cortes desses canais ganham força. Dá para mudar em Ajustes ou ver pelo filtro
+    "Programas completos";
   - **para variar**: de vez em quando entra um canal que você ainda não explorou.
 - **Filtros**: Cortes, Debates, Podcasts, Política, EUA, Notícias, Economia, Ao vivo, Rápidos (até 20 min),
   Longos (40 min ou mais), Novos.

@@ -146,6 +146,7 @@ const FILTROS = [
   ["noticias", "Notícias"],
   ["economia", "Economia"],
   ["aovivo", "Ao vivo"],
+  ["programa", "Programas completos"],
   null,
   ["curto", "Rápidos"],
   ["longo", "Longos"],
@@ -186,6 +187,15 @@ function noFeed(v) {
   return true;
 }
 
+// Agora/Recentes: programas completos de TV ficam de fora (a não ser no filtro deles),
+// e no Agora some o que já passou pela tela em 3 visitas sem você tocar
+function programaEscondido(v) {
+  return v.tags.includes("programa") && (D.ajustes.programas || "esconder") === "esconder" && ui.filtro !== "programa";
+}
+function noAgora(v) {
+  return noFeed(v) && !programaEscondido(v) && !((v.exib || 0) >= 3 && ui.filtro === "tudo" && !ui.busca);
+}
+
 function montarLista() {
   const q = semAcento(ui.busca.trim());
   const ids = porId();
@@ -198,12 +208,12 @@ function montarLista() {
 
   switch (ui.view) {
     case "agora": {
-      const base = D.videos.filter((v) => noFeed(v) && passaFiltro(v, ui.filtro) && passaBusca(v, q));
+      const base = D.videos.filter((v) => noAgora(v) && passaFiltro(v, ui.filtro) && passaBusca(v, q));
       return diversificar(agrupar(base)); // D.videos já vem ordenado pela nota
     }
     case "recentes":
       return agrupar(
-        D.videos.filter((v) => noFeed(v) && passaFiltro(v, ui.filtro) && passaBusca(v, q)).sort((a, b) => Date.parse(b.publicado) - Date.parse(a.publicado)),
+        D.videos.filter((v) => noFeed(v) && !programaEscondido(v) && passaFiltro(v, ui.filtro) && passaBusca(v, q)).sort((a, b) => Date.parse(b.publicado) - Date.parse(a.publicado)),
       );
     case "fila":
       return doMapa(D.depois, 1);
@@ -245,7 +255,7 @@ function agrupador() {
 
 // ---------- cards ----------
 
-const ROT_TAG = { corte: "Corte", debate: "Debate", podcast: "Podcast", eua: "EUA", aovivo: "Ao vivo" };
+const ROT_TAG = { corte: "Corte", debate: "Debate", podcast: "Podcast", eua: "EUA", aovivo: "Ao vivo", programa: "Programa completo" };
 
 function capa(v, hq) {
   const prog = D.progresso[v.id];
@@ -450,7 +460,7 @@ function renderCabeca() {
   if (!["canais", "importar", "ajustes"].includes(ui.view)) ferramentas.append(layout);
 
   if (ui.view === "agora") {
-    const novos = D.videos.filter((v) => ehNovo(v) && noFeed(v)).length;
+    const novos = D.videos.filter((v) => ehNovo(v) && noFeed(v) && !programaEscondido(v)).length;
     const fila = Object.keys(D.depois).length;
     box.append(
       h(
@@ -503,7 +513,8 @@ function renderFiltros() {
       continue;
     }
     const [k, rot] = f;
-    const n = k === "tudo" ? 0 : base.filter((v) => passaFiltro(v, k)).length;
+    const esconde = (v) => k !== "programa" && v.tags.includes("programa") && (D.ajustes.programas || "esconder") === "esconder";
+    const n = k === "tudo" ? 0 : base.filter((v) => passaFiltro(v, k) && !esconde(v)).length;
     if (k !== "tudo" && !n) continue;
     box.append(h("button", { class: `pill${ui.filtro === k ? " ativo" : ""}`, onclick: () => ((ui.filtro = ui.filtro === k ? "tudo" : k), render()) }, rot, n ? h("small", {}, n) : null));
   }
@@ -816,19 +827,24 @@ function observarExibicoes() {
     (ents) => {
       for (const e of ents) {
         const id = e.target.dataset.id;
-        if (e.isIntersecting) e.target._t = setTimeout(() => !exibidos.has(id) && (exibidos.add(id), filaExibidos.push(id)), 1500);
+        if (e.isIntersecting) e.target._t = setTimeout(() => !exibidos.has(id) && (exibidos.add(id), filaExibidos.push(id)), 1000);
         else clearTimeout(e.target._t);
       }
     },
-    { threshold: 0.6 },
+    { threshold: 0.5 },
   );
   for (const el of $$("#palco [data-id]")) if (!el._observado) (el._observado = true), observador.observe(el);
 }
-setInterval(() => {
+function enviarExibidos(saindo) {
   if (!filaExibidos.length) return;
-  const lote = filaExibidos.splice(0).map((id) => ({ tipo: "exibido", id }));
-  api("/api/acao", { lote }).catch(() => {});
-}, 15000);
+  const corpo = JSON.stringify({ lote: filaExibidos.splice(0).map((id) => ({ tipo: "exibido", id })) });
+  // ao fechar a aba, sendBeacon garante que o envio sai mesmo com a página indo embora
+  if (saindo && navigator.sendBeacon) navigator.sendBeacon("/api/acao", new Blob([corpo], { type: "application/json" }));
+  else fetch("/api/acao", { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo }).catch(() => {});
+}
+setInterval(enviarExibidos, 10000);
+addEventListener("visibilitychange", () => document.visibilityState === "hidden" && enviarExibidos(true));
+addEventListener("pagehide", () => enviarExibidos(true));
 
 // ---------- player ----------
 
@@ -1323,6 +1339,20 @@ function renderAjustes() {
       chave("Ler a duração dos vídeos", "Separa cortes curtos de podcasts longos. Abre a página de cada vídeo novo, devagar.", "detalhes"),
       numero("Buscar vídeos novos a cada (min)", "Mínimo 5.", "intervaloMin", 5, 240),
       numero("Mostrar vídeos dos últimos (dias)", "Vídeos salvos para depois ficam sempre.", "diasMax", 2, 60),
+      h(
+        "label",
+        { class: "interruptor" },
+        h("span", {}, "Programas completos de TV", h("small", {}, "Jornais inteiros, lives e edições completas. Os cortes desses canais continuam aparecendo.")),
+        h(
+          "select",
+          { onchange: (e) => salvar({ programas: e.target.value }) },
+          ...[
+            ["esconder", "Esconder do feed"],
+            ["menos", "Mostrar bem menos"],
+            ["normal", "Normal"],
+          ].map(([k, rot]) => h("option", { value: k, selected: (a.programas || "esconder") === k }, rot)),
+        ),
+      ),
     ),
   );
 

@@ -63,10 +63,10 @@ export function diversificar(lista, { janela = 30, explorar = 6 } = {}) {
   const out = [];
   let desdeExploracao = 0;
   while (resto.length) {
-    const ultimos = out.slice(-8);
-    const canaisRecentes = new Set(out.slice(-3).map((v) => v.canal));
+    const ultimos = out.slice(-10);
+    const canaisRecentes = new Set(out.slice(-4).map((v) => v.canal));
     const contagem = new Map();
-    for (const v of out.slice(-10)) for (const w of v.chaves || []) contagem.set(w, (contagem.get(w) || 0) + 1);
+    for (const v of out.slice(-8)) for (const w of v.chaves || []) contagem.set(w, (contagem.get(w) || 0) + 1);
 
     // de tempos em tempos, um canal pouco explorado
     if (explorar && desdeExploracao >= explorar) {
@@ -86,11 +86,12 @@ export function diversificar(lista, { janela = 30, explorar = 6 } = {}) {
       let nota = v.nota;
       let parecido = 0;
       for (const u of ultimos) parecido = Math.max(parecido, similaridade(v, u));
-      nota *= 1 - 0.6 * parecido;
-      if (canaisRecentes.has(v.canal)) nota *= 0.35;
+      nota *= 1 - 0.75 * parecido;
+      if (canaisRecentes.has(v.canal)) nota *= 0.3;
+      // tema (ou pessoa) que já apareceu 2 vezes nos últimos 8 cards perde força
       let saturados = 0;
-      for (const w of v.chaves || []) if ((contagem.get(w) || 0) >= 3) saturados++;
-      nota *= Math.max(0.35, Math.pow(0.7, saturados));
+      for (const w of v.chaves || []) if ((contagem.get(w) || 0) >= 2) saturados++;
+      nota *= Math.max(0.2, Math.pow(0.55, saturados));
       if (nota > melhorNota) {
         melhorNota = nota;
         melhor = i;
