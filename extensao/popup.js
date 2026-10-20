@@ -17,9 +17,9 @@ async function iniciar() {
   }
   $("#tela-principal").hidden = false;
   const url = cfg.servidor;
-  $("#abrir").href = url + "/#/inicio";
-  $("#n-novos").href = url + "/#/inicio";
-  $("#n-depois").href = url + "/#/depois";
+  $("#abrir").href = url + "/#/agora";
+  $("#n-novos").href = url + "/#/agora";
+  $("#n-depois").href = url + "/#/fila";
   $("#n-continuar").href = url + "/#/continuar";
   for (const k of ["botoes", "marcarMiniaturas", "autoVisto"]) {
     $("#" + k).checked = !!cfg[k];

@@ -121,3 +121,26 @@ test("lê título, canal e data da página do vídeo", () => {
   assert.equal(d.duracao, 125);
   assert.equal(d.publicado, "2026-10-19T14:00:00.000Z");
 });
+
+test("feed: agrupa o mesmo assunto e não empilha tema nem canal", async () => {
+  const { agrupar, diversificar } = await import("../public/ordenar.mjs");
+  const agora = Date.parse("2026-10-20T12:00:00Z");
+  const v = (id, canal, chaves, nota, extra = {}) => ({ id, canal, chaves, nota, publicado: new Date(agora - 3600e3).toISOString(), ...extra });
+  const lista = [
+    v("a", "c1", ["lula", "flavio", "debate", "globonews", "ajuste", "fiscal"], 10),
+    v("b", "c2", ["lula", "flavio", "debatem", "ajuste", "fiscal"], 9),
+    v("c", "c3", ["lula", "flavio", "ajuste", "fiscal", "corte"], 8),
+    v("d", "c4", ["lula", "governo", "pesquisa"], 7),
+    v("e", "c5", ["lula", "governo", "eleicao"], 6.9),
+    v("f", "c6", ["lula", "governo", "stf"], 6.8),
+    v("g", "c7", ["asmongold", "reage", "trump"], 5),
+    v("h", "c8", ["podcast", "economia", "juros"], 4, { explorar: true }),
+  ];
+  const reps = agrupar(lista);
+  assert.deepEqual(reps.find((r) => r.id === "a").similares.map((s) => s.id), ["b", "c"]);
+  const ordem = diversificar(reps, { explorar: 3 }).map((x) => x.id);
+  assert.equal(ordem[0], "a");
+  // depois de três vídeos sobre "lula", algo de outro tema sobe
+  assert.ok(ordem.indexOf("g") < ordem.indexOf("f"), ordem.join(","));
+  assert.ok(ordem.includes("h"));
+});

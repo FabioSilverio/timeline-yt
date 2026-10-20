@@ -11,6 +11,8 @@ import { fileURLToPath } from "node:url";
 import { Armazem } from "./lib/armazem.mjs";
 import { Motor } from "./lib/motor.mjs";
 import { montarTimeline } from "./lib/ranking.mjs";
+import { palavras } from "./lib/historico.mjs";
+import { Atualizador } from "./lib/atualizador.mjs";
 import { CATEGORIAS } from "./lib/seed.mjs";
 
 const RAIZ = path.dirname(fileURLToPath(import.meta.url));
@@ -20,6 +22,7 @@ const HOST = process.env.TIMELINE_HOST || "127.0.0.1";
 
 const armazem = new Armazem();
 const motor = new Motor(armazem);
+const atualizador = new Atualizador(RAIZ, { log: (m) => armazem.log(m), antesDeSair: () => armazem.salvarAgora() });
 const E = () => armazem.estado;
 
 // ---------- acesso ----------
@@ -76,6 +79,7 @@ function ipDe(req) {
 const TIPOS = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
@@ -169,6 +173,7 @@ function payloadTimeline() {
     interesses: e.interesses,
     bloqueios: e.bloqueios,
     pesosCategoria: e.ajustes.pesosCategoria,
+    exibicoes: e.exibicoes,
     agora,
   };
   const videos = montarTimeline(candidatos, ctx).map((v) => ({
@@ -181,6 +186,8 @@ function payloadTimeline() {
     short: v.short,
     aoVivo: v.aoVivo,
     descricao: v.descricao?.slice(0, 240),
+    chaves: [...new Set(palavras(v.titulo))].slice(0, 12),
+    explorar: semInteracao(v.canal),
     nota: Math.round(v.nota * 1000) / 1000,
     tags: v.tags,
     motivo: v.motivo,
@@ -207,6 +214,7 @@ function payloadTimeline() {
     categorias: CATEGORIAS,
     status: motor.status,
     pastaDados: armazem.dir,
+    versao: atualizador.info,
   };
 }
 
@@ -228,6 +236,13 @@ function resumo() {
     ultima: motor.status.ultima,
     rodando: motor.status.rodando,
   };
+}
+
+// Canal que você nunca viu, salvou nem pediu "mais": candidato a aparecer "para variar"
+function semInteracao(canalId) {
+  const c = E().canais[canalId];
+  const s = E().stats[canalId] || {};
+  return !!c && !c.vezesNoHistorico && !s.vistos && !s.mais && !s.depois && !c.peso;
 }
 
 function contar(canalId, campo, delta = 1) {
@@ -268,6 +283,12 @@ function acao({ tipo, id, t, d }) {
       if (e.ocultos[id]) contar(canal, "ocultos", -1);
       delete e.ocultos[id];
       break;
+    case "exibido": {
+      // conta no máximo uma exibição a cada 30 min por vídeo (sessões, não rolagem)
+      const x = (e.exibicoes[id] ||= { n: 0, ts: 0 });
+      if (agora - x.ts > 30 * 60e3) Object.assign(x, { n: x.n + 1, ts: agora });
+      break;
+    }
     case "progresso":
       if (Number.isFinite(t) && Number.isFinite(d) && d > 0) {
         if (t < 15) delete e.progresso[id];
@@ -384,6 +405,10 @@ async function api(req, res, rota) {
       armazem.salvar();
       return enviar(req, res, 200, { ok: true });
     }
+    case "/api/atualizar-codigo": {
+      const r = await atualizador.verificar();
+      return enviar(req, res, 200, r);
+    }
     case "/api/atualizar": {
       motor.atualizar().catch((err) => armazem.log("erro: " + err.message));
       return enviar(req, res, 202, { ok: true });
@@ -448,6 +473,8 @@ const servidor = http.createServer(async (req, res) => {
 servidor.listen(PORTA, HOST, () => {
   armazem.log(`Timeline YT em http://${HOST}:${PORTA} · dados em ${armazem.dir}`);
   if (!process.env.TIMELINE_SEM_ATUALIZAR) motor.iniciar();
+  atualizador.lerVersao();
+  atualizador.iniciar();
 });
 
 for (const sinal of ["SIGINT", "SIGTERM"]) {

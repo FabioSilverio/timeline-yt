@@ -1,17 +1,20 @@
-// Timeline YT — interface. Sem framework: o servidor manda tudo em /api/timeline
-// e as listas (Para você, Recentes, Depois, Histórico...) são filtradas aqui.
+// Timeline — interface. O servidor manda tudo em /api/timeline (com a nota de cada vídeo);
+// aqui as listas são filtradas, agrupadas por assunto e diversificadas (ordenar.mjs).
+
+import { agrupar, diversificar } from "./ordenar.mjs";
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
 function h(tag, attrs = {}, ...filhos) {
-  const el = document.createElementNS(tag === "svg" || tag === "path" ? "http://www.w3.org/2000/svg" : "http://www.w3.org/1999/xhtml", tag);
+  const svg = tag === "svg" || tag === "path";
+  const el = svg ? document.createElementNS("http://www.w3.org/2000/svg", tag) : document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v == null || v === false) continue;
     if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
     else if (k === "class") el.setAttribute("class", v);
     else if (k === "dataset") Object.assign(el.dataset, v);
-    else if (k in el && tag !== "svg" && tag !== "path") el[k] = v;
+    else if (!svg && k in el) el[k] = v;
     else el.setAttribute(k, v);
   }
   for (const f of filhos.flat()) if (f != null && f !== false) el.append(f.nodeType ? f : String(f));
@@ -19,34 +22,35 @@ function h(tag, attrs = {}, ...filhos) {
 }
 
 const ICONES = {
-  visto: "M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z",
-  depois: "M14.97 16.95 10 13.87V7h2v5.76l4.03 2.49-1.06 1.7zM12 3c-4.96 0-9 4.04-9 9s4.04 9 9 9 9-4.04 9-9-4.04-9-9-9m0-1c5.52 0 10 4.48 10 10s-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z",
-  ocultar: "m12.7 12 6.2-6.2-.7-.7-6.2 6.2-6.2-6.2-.7.7 6.2 6.2-6.2 6.2.7.7 6.2-6.2 6.2 6.2.7-.7z",
-  mais: "M12 16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5.67-1.5 1.5-1.5zM10.5 12c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5-.67-1.5-1.5-1.5-1.5.67-1.5 1.5zm0-6c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5-.67-1.5-1.5-1.5-1.5.67-1.5 1.5z",
+  vi: "M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z",
+  fila: "M4 6h12v2H4zm0 5h12v2H4zm0 5h8v2H4zm14-2v-4h2v4h3v2h-3v4h-2v-4h-3v-2z",
+  menos: "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+  tres: "M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
   play: "M8 5v14l11-7z",
-  verif: "M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zM9.8 17.3l-4.2-4.1L7 11.8l2.8 2.7L17 7.4l1.4 1.4-8.6 8.5z",
-  lixo: "M11 17H9V8h2v9zm4-9h-2v9h2V8zm4-4v1h-1v16H6V5H5V4h4V3h6v1h4zm-2 1H7v15h10V5z",
+  desfazer: "M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62A7.95 7.95 0 0 1 12.5 10c3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 10.53 17.15 8 12.5 8z",
+  grade: "M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z",
+  linhas: "M3 4h18v4H3zm0 6h18v4H3zm0 6h18v4H3z",
+  lixo: "M9 3h6l1 1h4v2H4V4h4zm-3 5h12l-1 13H7z",
   reler: "M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z",
-  mudo: "M3.63 3.63a.996.996 0 0 0 0 1.41L7.29 8.7 7 9H4c-.55 0-1 .45-1 1v4c0 .55.45 1 1 1h3l3.29 3.29c.63.63 1.71.18 1.71-.71v-4.17l4.18 4.18c-.49.37-1.02.68-1.6.91-.36.15-.58.53-.58.92 0 .72.73 1.18 1.39.91.8-.33 1.55-.77 2.22-1.31l1.34 1.34a.996.996 0 1 0 1.41-1.41L5.05 3.63c-.39-.39-1.02-.39-1.42 0zM19 12c0 .82-.15 1.61-.41 2.34l1.53 1.53c.56-1.17.88-2.48.88-3.87 0-3.83-2.4-7.11-5.78-8.4-.59-.23-1.22.23-1.22.86v.19c0 .38.25.71.61.85C17.18 6.54 19 9.06 19 12zm-8.71-6.29-.17.17L12 7.76V6.41c0-.89-1.08-1.33-1.71-.7zM16.5 12A4.5 4.5 0 0 0 14 7.97v1.79l2.48 2.48c.01-.08.02-.16.02-.24z",
+  mudo: "M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9zM12 4 9.91 6.09 12 8.18z",
   som: "M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z",
 };
-const icone = (nome) => h("svg", { viewBox: "0 0 24 24" }, h("path", { d: ICONES[nome] }));
+const icone = (nome) => h("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }, h("path", { d: ICONES[nome] }));
 
 // ---------- estado ----------
 
-let D = null; // payload do servidor
+let D = null;
 const ui = {
-  view: "inicio",
+  view: "agora",
   arg: null,
-  chip: "tudo",
+  filtro: "tudo",
   busca: "",
-  layout: lerLocal("layout", "lista"),
-  mostrarVistos: false,
-  mostrarShorts: false,
+  layout: lerLocal("layout", "grade"),
+  ordem: [], // ids na ordem da tela (estável entre cliques)
+  chave: "", // muda quando a ordem precisa ser refeita
   lista: [],
   mostrados: 0,
   sel: -1,
-  latMais: false,
 };
 
 function lerLocal(k, padrao) {
@@ -80,17 +84,16 @@ const fmtRel = new Intl.RelativeTimeFormat("pt-BR", { numeric: "auto" });
 
 function ha(iso) {
   const s = (Date.now() - (typeof iso === "number" ? iso : Date.parse(iso))) / 1000;
-  const passos = [
-    [60, "second"],
+  if (s < 60) return "agora";
+  for (const [lim, un, div] of [
     [3600, "minute", 60],
     [86400, "hour", 3600],
     [604800, "day", 86400],
     [2629800, "week", 604800],
     [31557600, "month", 2629800],
     [Infinity, "year", 31557600],
-  ];
-  if (s < 60) return "agora";
-  for (const [lim, un, div = 1] of passos) if (s < lim) return fmtRel.format(-Math.floor(s / div), un);
+  ])
+    if (s < lim) return fmtRel.format(-Math.floor(s / div), un);
 }
 
 function duracao(seg) {
@@ -104,50 +107,54 @@ function duracao(seg) {
 function rotuloDia(ts) {
   const d = new Date(ts);
   const hoje = new Date();
-  const ontem = new Date(Date.now() - 864e5);
   if (d.toDateString() === hoje.toDateString()) return "Hoje";
-  if (d.toDateString() === ontem.toDateString()) return "Ontem";
+  if (d.toDateString() === new Date(Date.now() - 864e5).toDateString()) return "Ontem";
   if (Date.now() - ts < 6 * 864e5) return d.toLocaleDateString("pt-BR", { weekday: "long" }).replace(/^./, (c) => c.toUpperCase());
   return d.toLocaleDateString("pt-BR", { day: "numeric", month: "long" });
 }
 
 const semAcento = (s = "") => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-const miniatura = (id) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+const miniatura = (id, hq) => `https://i.ytimg.com/vi/${id}/${hq ? "hqdefault" : "mqdefault"}.jpg`;
 const linkYT = (id) => `https://www.youtube.com/watch?v=${id}`;
+const porId = () => new Map(D.videos.map((v) => [v.id, v]));
 
 // ---------- listas ----------
 
-const CHIPS = [
+const FILTROS = [
   ["tudo", "Tudo"],
-  ["novos", "Novos"],
   ["corte", "Cortes"],
   ["debate", "Debates"],
   ["podcast", "Podcasts"],
   ["politica", "Política"],
+  ["eua", "EUA"],
   ["noticias", "Notícias"],
   ["economia", "Economia"],
-  ["eua", "EUA"],
   ["aovivo", "Ao vivo"],
-  ["curto", "Até 20 min"],
-  ["longo", "Mais de 40 min"],
+  null,
+  ["curto", "Rápidos"],
+  ["longo", "Longos"],
+  ["novos", "Novos"],
 ];
 
 const TITULOS = {
-  inicio: "Para você",
+  agora: "Agora",
   recentes: "Recentes",
-  continuar: "Continuar assistindo",
-  depois: "Assistir depois",
-  historico: "Histórico de exibição",
+  fila: "Sua fila",
+  continuar: "Continuar",
+  historico: "Vistos",
   ocultos: "Ocultos",
   canais: "Canais",
   importar: "Importar histórico",
   ajustes: "Ajustes",
 };
+const APELIDOS = { inicio: "agora", depois: "fila" };
 
-function passaChip(v, chip) {
-  if (chip === "tudo") return true;
-  if (chip === "novos") return (v.chegou || 0) > (D.visitaAnterior || 0) && Date.parse(v.publicado) > (D.visitaAnterior || 0) - 6 * 3600e3;
-  return v.tags.includes(chip);
+const ehNovo = (v) => (v.chegou || 0) > (D.visitaAnterior || 0) && Date.parse(v.publicado) > (D.visitaAnterior || 0) - 6 * 3600e3;
+
+function passaFiltro(v, f) {
+  if (f === "tudo") return true;
+  if (f === "novos") return ehNovo(v);
+  return v.tags.includes(f);
 }
 
 function passaBusca(v, q) {
@@ -156,260 +163,415 @@ function passaBusca(v, q) {
   return semAcento(`${v.titulo} ${c?.titulo || ""} ${v.descricao || ""}`).includes(q);
 }
 
-function baseFiltrada({ usarChip = true, respeitarVistos = true } = {}) {
-  const q = semAcento(ui.busca.trim());
-  return D.videos.filter((v) => {
-    if (D.ocultos[v.id]) return false;
-    if (respeitarVistos && D.vistos[v.id] && !ui.mostrarVistos && D.ajustes.esconderVistos) return false;
-    if (v.short && D.ajustes.esconderShorts && !ui.mostrarShorts) return false;
-    if (usarChip && !passaChip(v, ui.chip)) return false;
-    return passaBusca(v, q);
-  });
+// O feed nunca mostra o que já foi visto, está na fila ou foi descartado
+function noFeed(v) {
+  if (D.vistos[v.id] || D.depois[v.id] || D.ocultos[v.id]) return false;
+  if (v.short && D.ajustes.esconderShorts) return false;
+  return true;
 }
 
-function listaDaView() {
-  const porId = new Map(D.videos.map((v) => [v.id, v]));
+function montarLista() {
   const q = semAcento(ui.busca.trim());
+  const ids = porId();
   const doMapa = (mapa, ordem = -1) =>
     Object.entries(mapa)
-      .map(([id, ts]) => ({ v: porId.get(id), ts: typeof ts === "object" ? ts.ts : ts }))
+      .map(([id, ts]) => ({ v: ids.get(id), ts: typeof ts === "object" ? ts.ts : ts }))
       .filter((x) => x.v && passaBusca(x.v, q))
       .sort((a, b) => ordem * (a.ts - b.ts))
-      .map((x) => ({ ...x.v, _ts: x.ts }));
+      .map((x) => ({ ...x.v, _ts: x.ts, similares: [] }));
 
   switch (ui.view) {
-    case "inicio":
-      return baseFiltrada();
+    case "agora": {
+      const base = D.videos.filter((v) => noFeed(v) && passaFiltro(v, ui.filtro) && passaBusca(v, q));
+      return diversificar(agrupar(base)); // D.videos já vem ordenado pela nota
+    }
     case "recentes":
-      return baseFiltrada().sort((a, b) => Date.parse(b.publicado) - Date.parse(a.publicado));
+      return agrupar(
+        D.videos.filter((v) => noFeed(v) && passaFiltro(v, ui.filtro) && passaBusca(v, q)).sort((a, b) => Date.parse(b.publicado) - Date.parse(a.publicado)),
+      );
+    case "fila":
+      return doMapa(D.depois, 1);
     case "continuar":
       return doMapa(D.progresso);
-    case "depois":
-      return doMapa(D.depois, 1);
     case "historico":
       return doMapa(D.vistos);
     case "ocultos":
       return doMapa(D.ocultos);
     case "canal":
       return D.videos
-        .filter((v) => v.canal === ui.arg && passaBusca(v, q) && passaChip(v, ui.chip))
-        .sort((a, b) => Date.parse(b.publicado) - Date.parse(a.publicado));
+        .filter((v) => v.canal === ui.arg && passaFiltro(v, ui.filtro) && passaBusca(v, q))
+        .sort((a, b) => Date.parse(b.publicado) - Date.parse(a.publicado))
+        .map((v) => ({ ...v, similares: [] }));
   }
   return [];
 }
 
-function agrupar(view) {
-  if (view === "historico") return (v) => rotuloDia(v._ts);
-  if (view === "recentes" || view === "canal") return (v) => rotuloDia(Date.parse(v.publicado));
+// A ordem é refeita só quando a tela muda (filtro, busca, dados novos), não a cada clique,
+// para os cards não pularem de lugar.
+function listaAtual(forcar) {
+  const chave = [ui.view, ui.arg, ui.filtro, ui.busca, D.geracao].join("|");
+  if (forcar || chave !== ui.chave) {
+    ui.chave = chave;
+    ui.lista = montarLista();
+    return ui.lista;
+  }
+  const atual = montarLista();
+  const mapa = new Map(atual.map((v) => [v.id, v]));
+  ui.lista = ui.lista.filter((v) => mapa.has(v.id)).map((v) => mapa.get(v.id) && { ...mapa.get(v.id), similares: v.similares.filter((s) => noFeed(s)), paraVariar: v.paraVariar });
+  return ui.lista;
+}
+
+function agrupador() {
+  if (ui.view === "historico") return (v) => rotuloDia(v._ts);
+  if (ui.view === "recentes" || ui.view === "canal") return (v) => rotuloDia(Date.parse(v.publicado));
   return null;
+}
+
+// ---------- cards ----------
+
+const ROT_TAG = { corte: "Corte", debate: "Debate", podcast: "Podcast", eua: "EUA", aovivo: "Ao vivo" };
+
+function capa(v, hq) {
+  const prog = D.progresso[v.id];
+  const pct = prog ? Math.min(100, (prog.t / prog.d) * 100) : 0;
+  const novo = ehNovo(v) && !D.vistos[v.id];
+  return h(
+    "div",
+    { class: "capa", onclick: () => tocar(v.id) },
+    h("img", { src: miniatura(v.id, hq), alt: "", loading: "lazy", onerror: (e) => (e.target.style.visibility = "hidden") }),
+    h("div", { class: "play" }, h("span", {}, icone("play"))),
+    h("div", { class: "selo-topo" }, novo && ui.view === "agora" ? h("span", { class: "novo" }, "Novo") : null, v.paraVariar ? h("span", { class: "variar" }, "Para variar") : null),
+    v.aoVivo ? h("span", { class: "selo-tempo vivo" }, "AO VIVO") : v.duracao ? h("span", { class: "selo-tempo" }, duracao(v.duracao)) : v.short ? h("span", { class: "selo-tempo" }, "Short") : null,
+    pct ? h("div", { class: "barra-prog" }, h("b", { style: `width:${pct}%` })) : null,
+  );
+}
+
+function linhaCanal(v) {
+  const c = D.canais[v.canal] || {};
+  return h(
+    "div",
+    { class: "linha-canal" },
+    c.foto ? h("img", { src: c.foto, alt: "", loading: "lazy" }) : h("span", { class: "sem-foto" }),
+    h("a", { href: `#/canal/${v.canal}`, title: c.titulo }, c.titulo || "canal"),
+    h("span", { class: "pontinho" }, "·"),
+    h("span", {}, ha(v.publicado)),
+    v.views ? [h("span", { class: "pontinho" }, "·"), h("span", {}, `${fmtNum.format(v.views)} views`)] : null,
+  );
+}
+
+function textoPorque(v) {
+  if (ui.view === "historico") return `visto ${ha(v._ts)}`;
+  if (ui.view === "fila") return `na fila ${ha(v._ts)}`;
+  if (ui.view === "continuar") return `parou em ${duracao(D.progresso[v.id]?.t)} de ${duracao(D.progresso[v.id]?.d)}`;
+  if (v.paraVariar) return "para variar: canal que você ainda não explorou";
+  return v.motivo || "";
+}
+
+function botaoAcao(classe, nomeIcone, rotulo, titulo, fn, ligado) {
+  return h(
+    "button",
+    { class: `acao ${classe}${ligado ? " on" : ""}`, title: titulo, onclick: (e) => (e.stopPropagation(), fn()) },
+    icone(nomeIcone),
+    h("span", {}, rotulo),
+  );
+}
+
+function acoesDo(v) {
+  const id = v.id;
+  const mais = h("button", { class: "acao mais-btn", title: "Mais opções", onclick: (e) => (e.stopPropagation(), abrirMenu(e.currentTarget, v)) }, icone("tres"));
+  switch (ui.view) {
+    case "fila":
+      return [botaoAcao("vi", "vi", "Vi", "Já vi (v)", () => marcarVisto(id)), botaoAcao("menos", "desfazer", "Tirar", "Tirar da fila", () => tirarDaFila(id)), mais];
+    case "historico":
+      return [botaoAcao("vi on", "desfazer", "Não vi", "Desmarcar como visto", () => desmarcarVisto(id)), botaoAcao("fila", "fila", "Fila", "Pôr na fila", () => porNaFila(id), !!D.depois[id]), mais];
+    case "ocultos":
+      return [botaoAcao("vi", "desfazer", "Mostrar de novo", "Voltar para o feed", () => mostrarDeNovo(id)), mais];
+    default:
+      return [
+        botaoAcao("vi", "vi", "Vi", "Já vi (v)", () => marcarVisto(id), !!D.vistos[id]),
+        botaoAcao("fila", "fila", "Fila", "Assistir depois (f)", () => (D.depois[id] ? tirarDaFila(id) : porNaFila(id)), !!D.depois[id]),
+        botaoAcao("menos", "menos", "Menos", "Menos disso (x)", () => menosDisso(id)),
+        mais,
+      ];
+  }
+}
+
+function etiquetas(v) {
+  const tags = v.tags.filter((t) => ROT_TAG[t] && !(t === "eua" && ui.filtro === "eua"));
+  if (!tags.length) return null;
+  return h("div", { class: "etiquetas" }, tags.map((t) => h("span", { class: `etq ${t}` }, ROT_TAG[t])));
+}
+
+function botaoSimilares(v) {
+  const n = v.similares?.filter((s) => noFeed(s)).length;
+  if (!n) return null;
+  return h("button", { class: "mais-assunto", onclick: (e) => (e.stopPropagation(), abrirAssunto(v)) }, `+${n} sobre isso`);
+}
+
+function card(v, i) {
+  const el = h(
+    "article",
+    { class: "card", tabIndex: -1, dataset: { id: v.id, i } },
+    h("div", { class: "rastro dir" }, "⏱ Fila"),
+    h("div", { class: "rastro esq" }, "Vi ✓"),
+    capa(v),
+    h(
+      "div",
+      { class: "corpo" },
+      linhaCanal(v),
+      h("h3", { title: v.titulo, onclick: () => tocar(v.id) }, v.titulo),
+      textoPorque(v) ? h("div", { class: "porque" }, textoPorque(v)) : null,
+      etiquetas(v),
+      botaoSimilares(v),
+    ),
+    h("div", { class: "acoes" }, acoesDo(v)),
+  );
+  el.addEventListener("click", () => selecionar(i, false));
+  if (["agora", "recentes", "canal"].includes(ui.view)) gestos(el, v.id);
+  return el;
+}
+
+function destaque(v) {
+  return h(
+    "section",
+    { class: "destaque", dataset: { id: v.id, i: 0 } },
+    capa(v, true),
+    h(
+      "div",
+      {},
+      h("div", { class: "rotulo" }, v.paraVariar ? "Para variar" : "Sua melhor escolha agora"),
+      linhaCanal(v),
+      h("h2", { onclick: () => tocar(v.id) }, v.titulo),
+      v.motivo ? h("div", { class: "porque" }, v.motivo) : null,
+      h("div", { style: "margin-top:10px" }, etiquetas(v)),
+      h(
+        "div",
+        { class: "acoes-grandes" },
+        h("button", { class: "btn forte", onclick: () => tocar(v.id) }, icone("play"), "Assistir"),
+        h("button", { class: "btn", onclick: () => porNaFila(v.id) }, icone("fila"), "Fila"),
+        h("button", { class: "btn", onclick: () => marcarVisto(v.id) }, icone("vi"), "Já vi"),
+        h("button", { class: "btn", onclick: () => menosDisso(v.id) }, icone("menos"), "Menos disso"),
+        botaoSimilares(v),
+      ),
+    ),
+  );
+}
+
+// Celular: arrastar para a direita põe na fila, para a esquerda marca como visto
+function gestos(el, id) {
+  let x0 = 0;
+  let y0 = 0;
+  let dx = 0;
+  let ativo = false;
+  let decidido = false;
+  el.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "touch") return;
+    x0 = e.clientX;
+    y0 = e.clientY;
+    dx = 0;
+    ativo = true;
+    decidido = false;
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!ativo) return;
+    const ddx = e.clientX - x0;
+    const ddy = e.clientY - y0;
+    if (!decidido) {
+      if (Math.abs(ddy) > 12) return (ativo = false);
+      if (Math.abs(ddx) < 12) return;
+      decidido = true;
+      el.classList.add("arrastando");
+      el.setPointerCapture(e.pointerId);
+    }
+    dx = ddx;
+    el.style.transform = `translateX(${dx}px) rotate(${dx / 40}deg)`;
+    $(".rastro.dir", el).style.opacity = dx > 0 ? Math.min(1, dx / 90) : 0;
+    $(".rastro.esq", el).style.opacity = dx < 0 ? Math.min(1, -dx / 90) : 0;
+  });
+  const fim = () => {
+    if (!ativo) return;
+    ativo = false;
+    el.classList.remove("arrastando");
+    el.style.transform = "";
+    $$(".rastro", el).forEach((r) => (r.style.opacity = 0));
+    if (dx > 90) porNaFila(id, "dir");
+    else if (dx < -90) marcarVisto(id, "esq");
+    if (decidido) {
+      const bloquear = (e) => (e.stopPropagation(), e.preventDefault());
+      el.addEventListener("click", bloquear, { capture: true, once: true });
+      setTimeout(() => el.removeEventListener("click", bloquear, { capture: true }), 50);
+    }
+  };
+  el.addEventListener("pointerup", fim);
+  el.addEventListener("pointercancel", fim);
 }
 
 // ---------- render ----------
 
-function itemVideo(v, i) {
-  const c = D.canais[v.canal] || {};
-  const prog = D.progresso[v.id];
-  const visto = !!D.vistos[v.id];
-  const depois = !!D.depois[v.id];
-  const novo = (v.chegou || 0) > (D.visitaAnterior || 0) && !visto;
-  const tempo = v.aoVivo ? h("span", { class: "tempo vivo" }, "AO VIVO") : v.duracao ? h("span", { class: "tempo" }, duracao(v.duracao)) : v.short ? h("span", { class: "tempo" }, "SHORTS") : null;
-  const pct = prog ? Math.min(100, (prog.t / prog.d) * 100) : visto ? 100 : 0;
+const LOTE = 36;
 
-  const rapido = (nome, titulo, fn) => h("button", { title: titulo, onclick: (e) => (e.stopPropagation(), fn()) }, icone(nome));
-
-  const el = h(
-    "div",
-    { class: `item${visto ? " visto" : ""}`, tabIndex: -1, dataset: { id: v.id, i } },
-    h(
-      "div",
-      { class: "miniatura", onclick: () => tocar(v.id) },
-      h("img", { src: miniatura(v.id), alt: "", loading: "lazy", onerror: (e) => (e.target.style.visibility = "hidden") }),
-      tempo,
-      visto && ui.view !== "historico" ? h("span", { class: "selo-visto" }, "VISTO") : null,
-      pct ? h("div", { class: "barra" }, h("b", { style: `width:${pct}%` })) : null,
-      h(
-        "div",
-        { class: "rapidos" },
-        rapido("visto", visto ? "Marcar como não visto (v)" : "Marcar como visto (v)", () => alternarVisto(v.id)),
-        rapido("depois", depois ? "Tirar de Assistir depois (d)" : "Assistir depois (d)", () => alternarDepois(v.id)),
-        rapido("ocultar", "Não tenho interesse (x)", () => ocultar(v.id)),
-      ),
-    ),
-    h(
-      "div",
-      { class: "info" },
-      h("h3", { title: v.titulo, onclick: () => tocar(v.id) }, v.titulo),
-      h(
-        "div",
-        { class: "meta" },
-        h("a", { href: `#/canal/${v.canal}` }, c.titulo || "canal", " ", c.vezesNoHistorico ? icone("verif") : null),
-        v.views ? h("span", {}, `▷ ${fmtNum.format(v.views)}`) : null,
-        h("span", {}, ha(v.publicado)),
-        ui.view === "historico" ? h("span", {}, `visto ${ha(v._ts)}`) : null,
-        prog ? h("span", {}, `parou em ${duracao(prog.t)}`) : null,
-      ),
-      ui.view === "inicio" && v.motivo ? h("div", { class: "motivo" }, v.motivo) : null,
-      h(
-        "div",
-        { class: "etiquetas" },
-        novo ? h("span", { class: "etq novo" }, "Novo") : null,
-        depois && ui.view !== "depois" ? h("span", { class: "etq depois" }, "Assistir depois") : null,
-        ...v.tags.filter((t) => ["corte", "debate", "podcast", "aovivo"].includes(t)).map((t) => h("span", { class: `etq ${t}` }, { corte: "Corte", debate: "Debate", podcast: "Podcast", aovivo: "Ao vivo" }[t])),
-      ),
-      ui.layout === "lista" && v.descricao && ui.view !== "inicio" ? h("div", { class: "desc" }, v.descricao) : null,
-      h("button", { class: "mais-btn", title: "Ações", onclick: (e) => (e.stopPropagation(), abrirMenu(e.currentTarget, v)) }, icone("mais")),
-    ),
-  );
-  el.addEventListener("click", () => selecionar(i, false));
-  return el;
+function saudacao() {
+  const hora = new Date().getHours();
+  return hora < 5 ? "Boa madrugada" : hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
 }
 
-function renderChips() {
-  const box = $("#chips");
+function renderCabeca() {
+  const box = $("#cabeca");
   box.replaceChildren();
-  if (!["inicio", "recentes", "canal"].includes(ui.view)) return;
-  const base = ui.view === "canal" ? D.videos.filter((v) => v.canal === ui.arg) : baseFiltrada({ usarChip: false });
-  for (const [k, rot] of CHIPS) {
-    const n = base.filter((v) => passaChip(v, k)).length;
-    if (k !== "tudo" && !n) continue;
+  const ferramentas = h("div", { class: "ferramentas" });
+  const layout = h(
+    "button",
+    { class: "btn so-largo-btn", title: "Trocar visualização", onclick: () => ((ui.layout = ui.layout === "grade" ? "compacta" : "grade"), gravarLocal("layout", ui.layout), render()) },
+    icone(ui.layout === "grade" ? "linhas" : "grade"),
+    ui.layout === "grade" ? "Lista" : "Grade",
+  );
+  if (["agora", "recentes", "fila", "canal"].includes(ui.view)) {
+    ferramentas.append(h("button", { class: "btn forte", onclick: tocarTudo }, icone("play"), ui.view === "fila" ? "Tocar a fila" : "Tocar em sequência"));
+  }
+  if (["agora", "recentes", "canal"].includes(ui.view)) {
+    ferramentas.append(h("button", { class: "btn", onclick: marcarVisiveis, title: "Marcar como vistos os vídeos carregados na tela" }, icone("vi"), "Limpar tela"));
+  }
+  if (!["canais", "importar", "ajustes"].includes(ui.view)) ferramentas.append(layout);
+
+  if (ui.view === "agora") {
+    const novos = D.videos.filter((v) => ehNovo(v) && noFeed(v)).length;
+    const fila = Object.keys(D.depois).length;
     box.append(
-      h("button", { class: `chip${ui.chip === k ? " ativo" : ""}`, onclick: () => ((ui.chip = k), render()) }, rot, k !== "tudo" ? h("small", {}, n) : null),
+      h(
+        "div",
+        {},
+        h("h1", {}, saudacao()),
+        h("p", {}, h("b", {}, novos), novos === 1 ? " vídeo novo" : " vídeos novos", " desde a última visita · ", h("b", {}, fila), " na fila"),
+      ),
+      ferramentas,
     );
+  } else if (ui.view === "canal") {
+    const c = D.canais[ui.arg];
+    if (!c) return box.append(h("h1", {}, "Canal"));
+    box.append(
+      h(
+        "div",
+        { class: "cabeca-canal" },
+        c.foto ? h("img", { src: c.foto, alt: "" }) : h("span", { class: "sem-foto" }),
+        h(
+          "div",
+          {},
+          h("h1", {}, c.titulo),
+          h("p", {}, [c.handle ? "@" + c.handle : null, D.categorias[c.categoria], origemTexto(c)].filter(Boolean).join(" · ")),
+          h("div", { class: "linha-form", style: "margin-top:10px" }, controlesCanal(c), h("a", { class: "pilula", href: `https://www.youtube.com/channel/${c.id}`, target: "_blank", rel: "noopener" }, "YouTube ↗")),
+        ),
+      ),
+      ferramentas,
+    );
+  } else {
+    const sub = {
+      recentes: "Tudo o que saiu, do mais novo para o mais antigo.",
+      fila: "O que você guardou para assistir depois, na ordem em que guardou.",
+      continuar: "Vídeos que você começou e não terminou.",
+      historico: "O que você viu aqui e no YouTube (com a extensão).",
+      ocultos: "Vídeos que você descartou.",
+    }[ui.view];
+    box.append(h("div", {}, h("h1", {}, TITULOS[ui.view] || ""), sub ? h("p", {}, sub) : null));
+    if (ferramentas.childElementCount) box.append(ferramentas);
   }
 }
 
-const LOTE = 40;
-
-function render() {
-  if (!D) return;
-  for (const a of $$("[data-v]")) a.classList.toggle("ativo", a.dataset.v === ui.view);
-  $("#titulo-view").textContent = ui.view === "canal" ? "" : TITULOS[ui.view] || "";
-  $("#lista").className = `lista${ui.layout === "grade" ? " grade" : ""}`;
-  $("#txt-vistos").textContent = ui.mostrarVistos ? "Esconder vistos" : "Mostrar vistos";
-  $("#txt-shorts").textContent = ui.mostrarShorts || !D.ajustes.esconderShorts ? "Esconder Shorts" : "Mostrar Shorts";
-  $("#txt-layout").textContent = ui.layout === "grade" ? "Ver em lista" : "Ver em grade";
-  renderLateral();
-  renderContadores();
-
-  const lista = $("#lista");
-  lista.replaceChildren();
-  $("#chips").replaceChildren();
-  if (ui.view === "canais") return renderCanais();
-  if (ui.view === "importar") return renderImportar();
-  if (ui.view === "ajustes") return renderAjustes();
-  if (ui.view === "canal") renderCabecaCanal();
-
-  renderChips();
-  ui.lista = listaDaView();
-  ui.mostrados = 0;
-  ui.sel = Math.min(ui.sel, ui.lista.length - 1);
-  if (!ui.lista.length) return lista.append(vazio());
-  maisItens();
+function renderFiltros() {
+  const box = $("#filtros");
+  box.replaceChildren();
+  if (!["agora", "recentes", "canal"].includes(ui.view)) return;
+  const base = ui.view === "canal" ? D.videos.filter((v) => v.canal === ui.arg) : D.videos.filter(noFeed);
+  for (const f of FILTROS) {
+    if (!f) {
+      box.append(h("span", { class: "pill-sep" }));
+      continue;
+    }
+    const [k, rot] = f;
+    const n = k === "tudo" ? 0 : base.filter((v) => passaFiltro(v, k)).length;
+    if (k !== "tudo" && !n) continue;
+    box.append(h("button", { class: `pill${ui.filtro === k ? " ativo" : ""}`, onclick: () => ((ui.filtro = ui.filtro === k ? "tudo" : k), render()) }, rot, n ? h("small", {}, n) : null));
+  }
 }
 
-function maisItens() {
+function render({ manter } = {}) {
+  if (!D) return;
+  for (const a of $$("[data-v]")) a.classList.toggle("ativo", a.dataset.v === ui.view || (ui.view === "ocultos" && a.dataset.v === "ajustes") || (ui.view === "importar" && a.dataset.v === "ajustes"));
+  renderContadores();
+  renderCabeca();
+  renderFiltros();
   const lista = $("#lista");
-  const grupo = agrupar(ui.view);
-  const ate = Math.min(ui.lista.length, ui.mostrados + LOTE);
-  let ultimoGrupo = ui.mostrados ? grupo?.(ui.lista[ui.mostrados - 1]) : null;
+  const dest = $("#destaque");
+  lista.replaceChildren();
+  dest.replaceChildren();
+
+  if (["canais", "importar", "ajustes"].includes(ui.view)) {
+    lista.className = "lista paginas";
+    if (ui.view === "canais") return renderCanais();
+    if (ui.view === "importar") return renderImportar();
+    return renderAjustes();
+  }
+  lista.className = `lista${ui.layout === "compacta" ? " compacta" : ""}`;
+
+  const antes = ui.mostrados;
+  listaAtual();
+  ui.mostrados = 0;
+  if (!ui.lista.length) return lista.append(vazio());
+  let inicio = 0;
+  if (ui.view === "agora" && !ui.busca && ui.layout === "grade") {
+    dest.append(destaque(ui.lista[0]));
+    inicio = 1;
+  }
+  ui.inicio = inicio;
+  ui.mostrados = inicio;
+  maisItens(manter ? Math.max(antes, LOTE) : LOTE);
+  observarExibicoes();
+}
+
+function maisItens(qtd = LOTE) {
+  const lista = $("#lista");
+  const grupo = agrupador();
+  const ate = Math.min(ui.lista.length, ui.mostrados + qtd);
+  let ultimo = ui.mostrados > ui.inicio ? grupo?.(ui.lista[ui.mostrados - 1]) : null;
   for (let i = ui.mostrados; i < ate; i++) {
     const v = ui.lista[i];
     if (grupo) {
       const g = grupo(v);
-      if (g !== ultimoGrupo) lista.append(h("div", { class: "grupo-data" }, g));
-      ultimoGrupo = g;
+      if (g !== ultimo) lista.append(h("div", { class: "grupo-data" }, g));
+      ultimo = g;
     }
-    lista.append(itemVideo(v, i));
+    lista.append(card(v, i));
   }
   ui.mostrados = ate;
+  observarExibicoes();
 }
 
 function vazio() {
   const msgs = {
-    inicio: D.status.rodando || Object.keys(D.canais).length === 0
-      ? ["Montando sua timeline…", "Achando os canais e lendo os vídeos novos. Na primeira vez leva alguns minutos."]
-      : ["Tudo visto por aqui", "Troque o filtro, mostre os vistos ou atualize os feeds."],
-    recentes: ["Nada recente", "Atualize os feeds ou adicione canais."],
-    continuar: ["Nada pela metade", "Vídeos que você começar e não terminar aparecem aqui."],
-    depois: ["Lista vazia", "Use o relógio na miniatura (ou a tecla d) para guardar vídeos para depois."],
-    historico: ["Nenhum vídeo visto ainda", "Marque como visto (tecla v) ou assista até o fim."],
-    ocultos: ["Nenhum vídeo oculto", ""],
-    canal: ["Sem vídeos deste canal", "O feed pode não ter sido lido ainda."],
+    agora:
+      D.status.rodando || !Object.keys(D.canais).length
+        ? ["⏳", "Montando sua timeline…", "Lendo os canais. Na primeira vez leva alguns minutos."]
+        : ui.busca || ui.filtro !== "tudo"
+          ? ["🔎", "Nada com esse filtro", "Tente outro filtro ou limpe a busca."]
+          : ["🎉", "Você zerou o feed", "Tudo visto ou guardado. Quando sair coisa nova, aparece aqui."],
+    recentes: ["🕐", "Nada recente", "Atualize ou adicione canais."],
+    fila: ["📥", "Fila vazia", "Use o botão Fila nos cards (ou a tecla f) para guardar vídeos."],
+    continuar: ["▶️", "Nada pela metade", "Vídeos que você começar e não terminar aparecem aqui."],
+    historico: ["✓", "Nenhum vídeo visto ainda", "Marque como visto ou assista até o fim."],
+    ocultos: ["🙈", "Nenhum vídeo oculto", ""],
+    canal: ["📺", "Sem vídeos deste canal", "O feed dele pode não ter sido lido ainda."],
   };
-  const [t, s] = msgs[ui.view] || ["Nada aqui", ""];
-  return h("div", { class: "vazio" }, h("b", {}, t), s);
-}
-
-function renderLateral() {
-  const box = $("#lat-canais");
-  box.replaceChildren();
-  const naoVistosPorCanal = {};
-  for (const v of D.videos) {
-    if (!D.vistos[v.id] && !D.ocultos[v.id] && (v.chegou || 0) > (D.visitaAnterior || 0)) naoVistosPorCanal[v.canal] = (naoVistosPorCanal[v.canal] || 0) + 1;
-  }
-  const canais = Object.values(D.canais)
-    .filter((c) => !c.silenciado)
-    .sort((a, b) => (b.vezesNoHistorico || 0) + (b.peso || 0) * 5 - ((a.vezesNoHistorico || 0) + (a.peso || 0) * 5) || (a.titulo || "").localeCompare(b.titulo || ""));
-  const mostrar = ui.latMais ? canais : canais.slice(0, 8);
-  for (const c of mostrar) {
-    box.append(
-      h(
-        "a",
-        { class: "lat-canal", href: `#/canal/${c.id}`, title: c.titulo },
-        c.foto ? h("img", { src: c.foto, alt: "", loading: "lazy" }) : h("span", { class: "sem-foto" }),
-        h("span", {}, c.titulo || c.handle || c.id),
-        naoVistosPorCanal[c.id] ? h("i") : null,
-      ),
-    );
-  }
-  $("#lat-mais span").textContent = ui.latMais ? "Mostrar menos" : `Mostrar mais (${Math.max(0, canais.length - 8)})`;
-  $("#lat-mais").hidden = canais.length <= 8;
-  const s = D.status;
-  $("#lat-status").textContent = s.rodando
-    ? `Atualizando: ${s.etapa || "…"}`
-    : s.ultima
-      ? `Atualizado ${ha(s.ultima)} · ${Object.keys(D.canais).length} canais${D.pendentes.length ? ` · ${D.pendentes.length} por achar` : ""}`
-      : "Aguardando a primeira atualização";
+  const [e, t, s] = msgs[ui.view] || ["", "Nada aqui", ""];
+  return h("div", { class: "vazio" }, h("span", { class: "emoji" }, e), h("b", {}, t), s);
 }
 
 function renderContadores() {
-  const nDepois = Object.keys(D.depois).length;
-  const nCont = Object.keys(D.progresso).length;
-  $("#n-depois").textContent = nDepois || "";
-  $("#n-continuar").textContent = nCont || "";
-  const novos = D.videos.filter((v) => (v.chegou || 0) > (D.visitaAnterior || 0) && !D.vistos[v.id] && !D.ocultos[v.id] && !(v.short && D.ajustes.esconderShorts)).length;
-  $("#sino-n").hidden = !novos;
-  $("#sino-n").textContent = novos > 99 ? "99+" : novos;
-  document.title = novos ? `(${novos}) Timeline YT` : "Timeline YT";
-  $("#btn-atualizar").classList.toggle("girando", !!D.status.rodando);
+  $("#n-fila").textContent = Object.keys(D.depois).length || "";
+  $("#n-continuar").textContent = Object.keys(D.progresso).length || "";
+  const novos = D.videos.filter((v) => ehNovo(v) && noFeed(v)).length;
+  document.title = novos ? `(${novos}) Timeline` : "Timeline";
   const s = D.status;
-  const info = $("#painel-info");
-  info.replaceChildren(
-    ...[
-      h("span", {}, `${ui.lista.length || D.videos.length} vídeos nesta lista`),
-      h("span", {}, `${Object.keys(D.canais).length} canais · ${D.pendentes.length} por achar`),
-      s.semDuracao ? h("span", {}, `lendo duração de ${s.semDuracao} vídeos`) : null,
-      s.falhas ? h("span", {}, `${s.falhas} canal(is) com erro na última leitura`) : null,
-    ].filter(Boolean),
-  );
-}
-
-function renderCabecaCanal() {
-  const c = D.canais[ui.arg];
-  if (!c) return;
-  const cab = h(
-    "div",
-    { class: "cabeca-canal" },
-    c.foto ? h("img", { src: c.foto, alt: "" }) : h("span", { class: "sem-foto" }),
-    h(
-      "div",
-      {},
-      h("h1", {}, c.titulo),
-      h("p", {}, [c.handle ? "@" + c.handle : null, D.categorias[c.categoria], origemTexto(c)].filter(Boolean).join(" · ")),
-    ),
-    h("div", { class: "linha-form" }, controlesCanal(c), h("a", { class: "pilula", href: `https://www.youtube.com/channel/${c.id}`, target: "_blank", rel: "noopener" }, "Abrir no YouTube")),
-  );
-  $("#lista").append(cab);
+  $("#btn-atualizar").classList.toggle("girando", !!s.rodando);
+  $("#status").textContent = s.rodando ? `atualizando… ${s.etapa || ""}` : s.ultima ? `atualizado ${ha(s.ultima)}` : "";
 }
 
 function origemTexto(c) {
@@ -429,7 +591,8 @@ function origemTexto(c) {
 function avisar(msg, desfazer, erro = false) {
   const el = h("div", { class: `aviso${erro ? " erro" : ""}` }, h("span", {}, msg), desfazer ? h("button", { onclick: () => (desfazer(), el.remove()) }, "Desfazer") : null);
   $("#avisos").append(el);
-  setTimeout(() => el.remove(), desfazer ? 6000 : 4000);
+  while ($("#avisos").childElementCount > 3) $("#avisos").firstElementChild.remove();
+  setTimeout(() => el.remove(), desfazer ? 6000 : 3500);
 }
 
 async function enviarAcao(tipo, id, extra = {}) {
@@ -440,57 +603,78 @@ async function enviarAcao(tipo, id, extra = {}) {
   }
 }
 
-function alternarVisto(id, silencioso) {
-  if (D.vistos[id]) {
+// Tira o card da tela com animação e redesenha mantendo a posição
+function sair(id, direcao) {
+  const els = $$(`[data-id="${id}"]`);
+  if (!els.length) return render({ manter: true });
+  els.forEach((el) => el.classList.add(direcao === "dir" ? "saindo-dir" : direcao === "esq" ? "saindo-esq" : "saindo"));
+  setTimeout(() => render({ manter: true }), 230);
+}
+
+function marcarVisto(id, direcao) {
+  const antes = { depois: D.depois[id], prog: D.progresso[id] };
+  D.vistos[id] = Date.now();
+  delete D.depois[id];
+  delete D.progresso[id];
+  enviarAcao("visto", id);
+  sair(id, direcao);
+  avisar("Marcado como visto", () => {
     delete D.vistos[id];
     enviarAcao("nao-visto", id);
-    if (!silencioso) avisar("Marcado como não visto");
-  } else {
-    D.vistos[id] = Date.now();
-    const antesDepois = D.depois[id];
-    const antesProg = D.progresso[id];
-    delete D.depois[id];
-    delete D.progresso[id];
-    enviarAcao("visto", id);
-    if (!silencioso)
-      avisar("Marcado como visto", () => {
-        delete D.vistos[id];
-        if (antesDepois) {
-          D.depois[id] = antesDepois;
-          enviarAcao("depois", id);
-        }
-        if (antesProg) D.progresso[id] = antesProg;
-        enviarAcao("nao-visto", id);
-        render();
-      });
-  }
-  render();
+    if (antes.depois) (D.depois[id] = antes.depois), enviarAcao("depois", id);
+    if (antes.prog) D.progresso[id] = antes.prog;
+    render({ manter: true });
+  });
 }
 
-function alternarDepois(id) {
-  if (D.depois[id]) {
-    delete D.depois[id];
-    enviarAcao("tirar-depois", id);
-    avisar("Removido de Assistir depois", () => ((D.depois[id] = Date.now()), enviarAcao("depois", id), render()));
-  } else {
-    D.depois[id] = Date.now();
-    enviarAcao("depois", id);
-    avisar("Salvo em Assistir depois", () => ((delete D.depois[id]), enviarAcao("tirar-depois", id), render()));
-  }
-  render();
+function desmarcarVisto(id) {
+  delete D.vistos[id];
+  enviarAcao("nao-visto", id);
+  sair(id);
+  avisar("Voltou para o feed", () => ((D.vistos[id] = Date.now()), enviarAcao("visto", id), render({ manter: true })));
 }
 
-function ocultar(id) {
-  if (D.ocultos[id]) {
-    delete D.ocultos[id];
-    enviarAcao("mostrar", id);
-  } else {
-    D.ocultos[id] = Date.now();
-    delete D.depois[id];
-    enviarAcao("ocultar", id);
-    avisar("Vídeo oculto. A timeline vai mostrar menos desse canal.", () => ((delete D.ocultos[id]), enviarAcao("mostrar", id), render()));
+function porNaFila(id, direcao) {
+  D.depois[id] = Date.now();
+  enviarAcao("depois", id);
+  if (ui.view === "historico") render({ manter: true });
+  else sair(id, direcao);
+  avisar("Guardado na fila", () => (delete D.depois[id], enviarAcao("tirar-depois", id), render({ manter: true })));
+}
+
+function tirarDaFila(id) {
+  const ts = D.depois[id];
+  delete D.depois[id];
+  enviarAcao("tirar-depois", id);
+  sair(id);
+  avisar("Saiu da fila", () => ((D.depois[id] = ts), enviarAcao("depois", id), render({ manter: true })));
+}
+
+async function menosDisso(id) {
+  D.ocultos[id] = Date.now();
+  delete D.depois[id];
+  sair(id);
+  try {
+    await api("/api/sinal", { tipo: "menos", id });
+  } catch (e) {
+    return avisar(e.message, null, true);
   }
-  render();
+  avisar("Entendido: menos disso", () => (delete D.ocultos[id], enviarAcao("mostrar", id), render({ manter: true })));
+}
+
+function mostrarDeNovo(id) {
+  delete D.ocultos[id];
+  enviarAcao("mostrar", id);
+  sair(id);
+}
+
+async function maisDisso(id) {
+  try {
+    await api("/api/sinal", { tipo: "mais", id });
+    avisar("Entendido: mais disso");
+  } catch (e) {
+    avisar(e.message, null, true);
+  }
 }
 
 async function editarCanal(id, mudancas, msg) {
@@ -504,21 +688,34 @@ async function editarCanal(id, mudancas, msg) {
   }
 }
 
+function marcarVisiveis() {
+  const alvo = ui.lista.slice(0, ui.mostrados).filter((v) => !D.vistos[v.id]);
+  if (!alvo.length || !confirm(`Marcar ${alvo.length} vídeos como vistos?`)) return;
+  for (const v of alvo) D.vistos[v.id] = Date.now();
+  api("/api/acao", { lote: alvo.map((v) => ({ tipo: "visto", id: v.id })) }).catch((e) => avisar(e.message, null, true));
+  avisar(`${alvo.length} vídeos marcados`, () => {
+    for (const v of alvo) delete D.vistos[v.id];
+    api("/api/acao", { lote: alvo.map((v) => ({ tipo: "nao-visto", id: v.id })) });
+    render();
+  });
+  render();
+}
+
 function abrirMenu(alvo, v) {
   const menu = $("#menu");
   const c = D.canais[v.canal] || {};
   const item = (texto, fn) => h("button", { onclick: () => (fecharMenu(), fn()) }, texto);
   menu.replaceChildren(
-    item(D.depois[v.id] ? "Tirar de Assistir depois" : "Salvar em Assistir depois", () => alternarDepois(v.id)),
-    item(D.vistos[v.id] ? "Marcar como não visto" : "Marcar como visto", () => alternarVisto(v.id)),
-    item(D.ocultos[v.id] ? "Mostrar de novo" : "Não tenho interesse", () => ocultar(v.id)),
+    item("👍 Mais disso", () => maisDisso(v.id)),
+    D.ocultos[v.id] ? item("Mostrar de novo", () => mostrarDeNovo(v.id)) : item("👎 Menos disso", () => menosDisso(v.id)),
+    v.similares?.length ? item(`Ver os ${v.similares.length + 1} vídeos sobre isso`, () => abrirAssunto(v)) : null,
     h("hr"),
-    h("a", { href: linkYT(v.id), target: "_blank", rel: "noopener", onclick: fecharMenu }, "Abrir no YouTube"),
+    h("a", { href: linkYT(v.id), target: "_blank", rel: "noopener", onclick: fecharMenu }, "Abrir no YouTube ↗"),
     item("Copiar link", () => navigator.clipboard?.writeText(linkYT(v.id)).then(() => avisar("Link copiado"))),
     h("a", { href: `#/canal/${v.canal}`, onclick: fecharMenu }, `Ir para ${c.titulo || "o canal"}`),
     h("hr"),
-    item("Mais vídeos deste canal", () => editarCanal(v.canal, { peso: Math.min(3, (c.peso || 0) + 1) }, `Prioridade de ${c.titulo} aumentada`)),
-    item("Menos vídeos deste canal", () => editarCanal(v.canal, { peso: Math.max(-2, (c.peso || 0) - 1) }, `Prioridade de ${c.titulo} reduzida`)),
+    item("Mais vídeos deste canal", () => editarCanal(v.canal, { peso: Math.min(3, (c.peso || 0) + 1) }, `${c.titulo} vai aparecer mais`)),
+    item("Menos vídeos deste canal", () => editarCanal(v.canal, { peso: Math.max(-2, (c.peso || 0) - 1) }, `${c.titulo} vai aparecer menos`)),
     item("Silenciar canal", () => editarCanal(v.canal, { silenciado: true }, `${c.titulo} silenciado`)),
   );
   menu.hidden = false;
@@ -526,7 +723,7 @@ function abrirMenu(alvo, v) {
   const w = menu.offsetWidth;
   const hh = menu.offsetHeight;
   menu.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + "px";
-  menu.style.top = (r.bottom + hh > innerHeight - 8 ? Math.max(8, r.top - hh) : r.bottom) + "px";
+  menu.style.top = (r.bottom + hh > innerHeight - 8 ? Math.max(8, r.top - hh) : r.bottom + 4) + "px";
 }
 function fecharMenu() {
   $("#menu").hidden = true;
@@ -534,6 +731,88 @@ function fecharMenu() {
 document.addEventListener("click", (e) => {
   if (!$("#menu").hidden && !e.target.closest("#menu") && !e.target.closest(".mais-btn")) fecharMenu();
 });
+
+// Todos os vídeos sobre o mesmo assunto, numa folha por cima
+function abrirAssunto(v) {
+  const todos = [v, ...(v.similares || [])].filter((x) => noFeed(x) || x.id === v.id);
+  const corpo = $("#folha-corpo");
+  $("#folha-titulo").textContent = `${todos.length} vídeos sobre isso`;
+  const desenhar = () => {
+    const vivos = todos.filter((x) => noFeed(x));
+    if (!vivos.length) return fecharFolha();
+    corpo.replaceChildren(
+      h(
+        "div",
+        { class: "atalhos-pagina" },
+        h("button", { class: "btn forte", onclick: () => (fecharFolha(), tocar(vivos[0].id, vivos)) }, icone("play"), "Tocar todos"),
+        h(
+          "button",
+          {
+            class: "btn",
+            onclick: () => {
+              for (const x of vivos) D.vistos[x.id] = Date.now();
+              api("/api/acao", { lote: vivos.map((x) => ({ tipo: "visto", id: x.id })) });
+              fecharFolha();
+              render({ manter: true });
+              avisar(`${vivos.length} vídeos marcados como vistos`);
+            },
+          },
+          icone("vi"),
+          "Já vi esse assunto",
+        ),
+      ),
+      h(
+        "div",
+        { class: "lista" },
+        vivos.map((x) =>
+          h(
+            "article",
+            { class: "card", dataset: { id: x.id } },
+            capa(x),
+            h("div", { class: "corpo" }, linhaCanal(x), h("h3", { onclick: () => (fecharFolha(), tocar(x.id, vivos)) }, x.titulo)),
+            h(
+              "div",
+              { class: "acoes" },
+              botaoAcao("vi", "vi", "Vi", "Já vi", () => ((D.vistos[x.id] = Date.now()), enviarAcao("visto", x.id), desenhar(), render({ manter: true }))),
+              botaoAcao("fila", "fila", "Fila", "Fila", () => ((D.depois[x.id] = Date.now()), enviarAcao("depois", x.id), desenhar(), render({ manter: true }))),
+            ),
+          ),
+        ),
+      ),
+    );
+  };
+  desenhar();
+  $("#folha").hidden = false;
+}
+function fecharFolha() {
+  $("#folha").hidden = true;
+}
+$("#folha-fechar").onclick = fecharFolha;
+$("#folha").addEventListener("click", (e) => e.target.id === "folha" && fecharFolha());
+
+// Exibições: o que ficou 1,5 s na tela e você não tocou perde força nas próximas vezes
+const exibidos = new Set();
+const filaExibidos = [];
+let observador = null;
+function observarExibicoes() {
+  if (ui.view !== "agora") return;
+  observador ||= new IntersectionObserver(
+    (ents) => {
+      for (const e of ents) {
+        const id = e.target.dataset.id;
+        if (e.isIntersecting) e.target._t = setTimeout(() => !exibidos.has(id) && (exibidos.add(id), filaExibidos.push(id)), 1500);
+        else clearTimeout(e.target._t);
+      }
+    },
+    { threshold: 0.6 },
+  );
+  for (const el of $$("#palco [data-id]")) if (!el._observado) (el._observado = true), observador.observe(el);
+}
+setInterval(() => {
+  if (!filaExibidos.length) return;
+  const lote = filaExibidos.splice(0).map((id) => ({ tipo: "exibido", id }));
+  api("/api/acao", { lote }).catch(() => {});
+}, 15000);
 
 // ---------- player ----------
 
@@ -549,12 +828,19 @@ function carregarApiYT() {
 
 const P = { player: null, id: null, fila: [], timer: null, ultimoEnvio: 0 };
 
+function tocarTudo() {
+  const lista = ui.lista.filter((v) => !D.vistos[v.id]);
+  if (lista.length) tocar(lista[0].id, lista);
+}
+
 async function tocar(id, fila) {
   const v = D.videos.find((x) => x.id === id);
   if (!v) return;
   P.fila = (fila || ui.lista).map((x) => x.id);
+  if (!P.fila.includes(id)) P.fila.unshift(id);
   P.id = id;
   $("#player").hidden = false;
+  $("#player").scrollTo(0, 0);
   document.body.style.overflow = "hidden";
   preencherPlayer(v);
   const YT = await carregarApiYT();
@@ -587,11 +873,10 @@ function preencherPlayer(v) {
   $("#pl-titulo").textContent = v.titulo;
   $("#pl-canal").textContent = c.titulo || "";
   $("#pl-canal").href = `#/canal/${v.canal}`;
-  $("#pl-meta").textContent = [v.views ? `${fmtNum.format(v.views)} visualizações` : null, ha(v.publicado), v.duracao ? duracao(v.duracao) : null].filter(Boolean).join(" · ");
+  $("#pl-meta").textContent = [v.views ? `· ${fmtNum.format(v.views)} views` : null, `· ${ha(v.publicado)}`, v.duracao ? `· ${duracao(v.duracao)}` : null].filter(Boolean).join(" ");
   $("#pl-yt").href = linkYT(v.id);
-  $("#pl-depois").textContent = D.depois[v.id] ? "Tirar de Depois" : "Assistir depois";
-  const vel = $("#pl-vel");
-  vel.replaceChildren(
+  $("#pl-depois").textContent = D.depois[v.id] ? "⏱ Na fila" : "⏱ Fila";
+  $("#pl-vel").replaceChildren(
     ...[1, 1.25, 1.5, 1.75, 2].map((x) =>
       h(
         "button",
@@ -608,20 +893,18 @@ function preencherPlayer(v) {
       ),
     ),
   );
-  const fila = $("#pl-fila");
-  const prox = proximos(8);
-  fila.replaceChildren(
-    ...prox.map((p) => {
-      const pc = D.canais[p.canal] || {};
-      return h(
+  const prox = proximos(10);
+  $("#pl-fila").replaceChildren(
+    ...prox.map((p) =>
+      h(
         "div",
-        { class: "item", onclick: () => tocar(p.id, P.fila.map((id) => ({ id }))) },
-        h("div", { class: "miniatura" }, h("img", { src: miniatura(p.id), alt: "", loading: "lazy" }), p.duracao ? h("span", { class: "tempo" }, duracao(p.duracao)) : null),
-        h("div", { class: "info" }, h("h3", {}, p.titulo), h("div", { class: "meta" }, pc.titulo || "", " · ", ha(p.publicado))),
-      );
-    }),
+        { class: "pl-item", onclick: () => tocar(p.id, P.fila.map((id) => ({ id }))) },
+        h("div", { class: "capa" }, h("img", { src: miniatura(p.id), alt: "", loading: "lazy" }), p.duracao ? h("span", { class: "selo-tempo" }, duracao(p.duracao)) : null),
+        h("div", {}, h("b", {}, p.titulo), h("small", {}, `${D.canais[p.canal]?.titulo || ""} · ${ha(p.publicado)}`)),
+      ),
+    ),
   );
-  if (!prox.length) fila.append(h("p", { class: "pl-meta" }, "Fim da lista."));
+  if (!prox.length) $("#pl-fila").append(h("p", { class: "pl-meta" }, "Fim da lista."));
 }
 
 function proximos(n) {
@@ -648,8 +931,16 @@ function salvarProgresso(forcar) {
   return { t, d };
 }
 
+function vistoSilencioso(id) {
+  if (D.vistos[id]) return;
+  D.vistos[id] = Date.now();
+  delete D.depois[id];
+  delete D.progresso[id];
+  enviarAcao("visto", id);
+}
+
 function terminou() {
-  if (D.ajustes.marcarAoTerminar && !D.vistos[P.id]) alternarVisto(P.id, true);
+  if (D.ajustes.marcarAoTerminar) vistoSilencioso(P.id);
   if (D.ajustes.autoplay) proximo();
 }
 
@@ -661,27 +952,32 @@ function proximo() {
 
 function fecharPlayer() {
   const r = salvarProgresso(true);
-  if (r && r.d && r.t / r.d > 0.92 && !D.vistos[P.id]) alternarVisto(P.id, true);
+  if (r && r.d && r.t / r.d > 0.92) vistoSilencioso(P.id);
   clearInterval(P.timer);
   P.player?.stopVideo?.();
   $("#player").hidden = true;
   document.body.style.overflow = "";
   P.id = null;
-  render();
+  render({ manter: true });
 }
 
 $("#pl-fechar").onclick = fecharPlayer;
 $("#pl-visto-prox").onclick = () => {
-  if (!D.vistos[P.id]) alternarVisto(P.id, true);
+  vistoSilencioso(P.id);
   proximo();
 };
 $("#pl-depois").onclick = () => {
-  alternarDepois(P.id);
+  if (D.depois[P.id]) delete D.depois[P.id], enviarAcao("tirar-depois", P.id);
+  else (D.depois[P.id] = Date.now()), enviarAcao("depois", P.id);
   preencherPlayer(D.videos.find((x) => x.id === P.id));
 };
-$("#player").addEventListener("click", (e) => {
-  if (e.target.id === "player") fecharPlayer();
-});
+$("#pl-menos").onclick = () => {
+  const id = P.id;
+  D.ocultos[id] = Date.now();
+  api("/api/sinal", { tipo: "menos", id }).catch(() => {});
+  avisar("Entendido: menos disso");
+  proximo();
+};
 
 // ---------- páginas de gestão ----------
 
@@ -953,6 +1249,47 @@ function editorLista(titulo, ajuda, valores, campo) {
 function renderAjustes() {
   const box = $("#lista");
   const a = D.ajustes;
+  const ver = D.versao || {};
+  box.append(
+    h(
+      "div",
+      { class: "atalhos-pagina" },
+      h("a", { class: "btn", href: "#/importar" }, "Importar histórico e extensão"),
+      h("a", { class: "btn", href: "#/ocultos" }, "Vídeos ocultos"),
+      h("a", { class: "btn", href: "#/canais" }, "Gerenciar canais"),
+    ),
+    h(
+      "div",
+      { class: "cartao" },
+      h("h2", {}, "Versão"),
+      h(
+        "p",
+        {},
+        ver.commit ? `Rodando a versão ${ver.commit} (${new Date(ver.data).toLocaleString("pt-BR")}).` : "Versão desconhecida.",
+        " ",
+        ver.ativo ? "Atualiza sozinho do GitHub a cada 15 minutos." : "Atualização automática desligada.",
+        ver.verificado ? ` Última conferência ${ha(ver.verificado)}.` : "",
+        ver.erro ? ` Último erro: ${ver.erro}` : "",
+      ),
+      h(
+        "button",
+        {
+          class: "pilula",
+          onclick: async (e) => {
+            e.target.disabled = true;
+            try {
+              const r = await api("/api/atualizar-codigo", {});
+              avisar(r.aplicado ? "Versão nova instalada; a página recarrega em 30 s" : r.erro ? r.erro : "Já está na última versão", null, !!r.erro);
+              if (r.aplicado) setTimeout(() => location.reload(), 30000);
+            } finally {
+              e.target.disabled = false;
+            }
+          },
+        },
+        "Procurar atualização agora",
+      ),
+    ),
+  );
   const salvar = (mud) => api("/api/ajustes", { ajustes: mud }).then(() => carregar(true));
   const chave = (rot, ajuda, k) =>
     h("label", { class: "interruptor" }, h("span", {}, rot, h("small", {}, ajuda)), h("input", { type: "checkbox", checked: !!a[k], onchange: (e) => salvar({ [k]: e.target.checked }) }));
@@ -964,7 +1301,6 @@ function renderAjustes() {
       "div",
       { class: "cartao" },
       h("h2", {}, "Timeline"),
-      chave("Esconder vídeos vistos", "Somem da timeline depois de marcados.", "esconderVistos"),
       chave("Esconder Shorts", "Shorts não entram na timeline.", "esconderShorts"),
       chave("Tocar o próximo sozinho", "Ao terminar um vídeo, já começa o seguinte da lista.", "autoplay"),
       chave("Marcar como visto ao terminar", "Também marca quando você fecha depois de ver mais de 92%.", "marcarAoTerminar"),
@@ -1047,30 +1383,31 @@ function renderAjustes() {
   );
 }
 
+
 // ---------- navegação ----------
 
 function rota() {
   const partes = location.hash.replace(/^#\/?/, "").split("/");
-  const v = partes[0] || "inicio";
-  const nova = TITULOS[v] || v === "canal" ? v : "inicio";
-  if (nova !== ui.view || partes[1] !== ui.arg) {
-    ui.chip = "tudo";
+  let v = APELIDOS[partes[0]] || partes[0] || "agora";
+  if (!TITULOS[v] && v !== "canal") v = "agora";
+  if (v !== ui.view || partes[1] !== ui.arg) {
+    ui.filtro = "tudo";
     ui.sel = -1;
     window.scrollTo(0, 0);
   }
-  ui.view = nova;
+  ui.view = v;
   ui.arg = partes[1] || null;
-  document.body.classList.remove("menu-aberto");
+  fecharFolha();
   render();
 }
 addEventListener("hashchange", rota);
 
 function selecionar(i, rolar = true) {
-  const itens = $$("#lista .item");
-  if (!itens.length) return;
-  ui.sel = Math.max(0, Math.min(itens.length - 1, i));
-  itens.forEach((el) => el.classList.toggle("selecionado", Number(el.dataset.i) === ui.sel));
-  const el = itens.find((x) => Number(x.dataset.i) === ui.sel);
+  const cards = $$("#palco [data-i]");
+  if (!cards.length) return;
+  ui.sel = Math.max(0, Math.min(ui.mostrados - 1, i));
+  cards.forEach((el) => el.classList.toggle("selecionado", Number(el.dataset.i) === ui.sel));
+  const el = cards.find((x) => Number(x.dataset.i) === ui.sel);
   if (rolar && el) el.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
@@ -1080,11 +1417,11 @@ addEventListener("keydown", (e) => {
     return;
   }
   const aberto = !$("#player").hidden;
-  if (e.key === "Escape") return aberto ? fecharPlayer() : fecharMenu();
+  if (e.key === "Escape") return aberto ? fecharPlayer() : (fecharMenu(), fecharFolha());
   if (aberto) {
     if (e.key === "n") proximo();
     if (e.key === "v") $("#pl-visto-prox").click();
-    if (e.key === "d") $("#pl-depois").click();
+    if (e.key === "f" || e.key === "d") $("#pl-depois").click();
     return;
   }
   const v = ui.lista[ui.sel];
@@ -1100,13 +1437,14 @@ addEventListener("keydown", (e) => {
       if (v) tocar(v.id);
       break;
     case "v":
-      if (v) alternarVisto(v.id), selecionar(ui.sel, false);
+      if (v) marcarVisto(v.id);
       break;
+    case "f":
     case "d":
-      if (v) alternarDepois(v.id), selecionar(ui.sel, false);
+      if (v) porNaFila(v.id);
       break;
     case "x":
-      if (v) ocultar(v.id), selecionar(ui.sel, false);
+      if (v) menosDisso(v.id);
       break;
     case "/":
       e.preventDefault();
@@ -1122,74 +1460,33 @@ addEventListener("keydown", (e) => {
 
 new IntersectionObserver((ent) => {
   if (ent[0].isIntersecting && D && ui.mostrados < ui.lista.length) maisItens();
-}, { rootMargin: "800px" }).observe($("#sentinela"));
+}, { rootMargin: "900px" }).observe($("#sentinela"));
 
-// busca (topo e painel ficam sincronizadas)
-for (const id of ["#busca", "#busca-painel"]) {
-  $(id).addEventListener("input", (e) => {
-    ui.busca = e.target.value;
-    for (const o of ["#busca", "#busca-painel"]) if (o !== id) $(o).value = ui.busca;
-    clearTimeout(ui.tBusca);
-    ui.tBusca = setTimeout(render, 150);
-  });
-}
-$("#form-busca").onsubmit = (e) => {
-  e.preventDefault();
-  if (!["inicio", "recentes", "canais", "historico", "depois", "canal"].includes(ui.view)) location.hash = "#/inicio";
-  render();
-};
-$("#busca-limpar").onclick = () => {
-  ui.busca = $("#busca").value = $("#busca-painel").value = "";
-  render();
-};
-$("#btn-menu").onclick = () => {
-  if (innerWidth <= 1000) document.body.classList.toggle("menu-aberto");
-  else document.body.classList.toggle("lateral-fechada");
-};
-$("#veu").onclick = () => document.body.classList.remove("menu-aberto");
-$("#lat-mais").onclick = () => ((ui.latMais = !ui.latMais), renderLateral());
+$("#busca").addEventListener("input", (e) => {
+  ui.busca = e.target.value;
+  clearTimeout(ui.tBusca);
+  ui.tBusca = setTimeout(() => {
+    if (!["agora", "recentes", "fila", "historico", "continuar", "canal", "canais", "ocultos"].includes(ui.view)) location.hash = "#/agora";
+    else render();
+  }, 160);
+});
+$("#form-busca").onsubmit = (e) => (e.preventDefault(), render());
 $("#btn-atualizar").onclick = async () => {
   await api("/api/atualizar", {});
   D.status.rodando = true;
-  render();
+  renderContadores();
   avisar("Buscando vídeos novos…");
   vigiar();
-};
-$("#acao-tocar").onclick = () => {
-  const lista = ui.lista.filter((v) => !D.vistos[v.id]);
-  if (lista.length) tocar(lista[0].id, lista);
-};
-$("#acao-marcar-todos").onclick = () => {
-  const alvo = ui.lista.slice(0, ui.mostrados).filter((v) => !D.vistos[v.id]);
-  if (!alvo.length || !confirm(`Marcar ${alvo.length} vídeos como vistos?`)) return;
-  for (const v of alvo) D.vistos[v.id] = Date.now();
-  api("/api/acao", { lote: alvo.map((v) => ({ tipo: "visto", id: v.id })) }).catch((e) => avisar(e.message, null, true));
-  avisar(`${alvo.length} vídeos marcados`, () => {
-    for (const v of alvo) delete D.vistos[v.id];
-    api("/api/acao", { lote: alvo.map((v) => ({ tipo: "nao-visto", id: v.id })) });
-    render();
-  });
-  render();
-};
-$("#acao-vistos").onclick = () => ((ui.mostrarVistos = !ui.mostrarVistos), render());
-$("#acao-shorts").onclick = () => ((ui.mostrarShorts = !ui.mostrarShorts), render());
-$("#acao-layout").onclick = () => {
-  ui.layout = ui.layout === "grade" ? "lista" : "grade";
-  gravarLocal("layout", ui.layout);
-  render();
 };
 
 // ---------- dados ----------
 
-async function carregar(manterRolagem) {
+async function carregar(manter) {
   const y = scrollY;
-  const mostrados = ui.mostrados;
   D = await api("/api/timeline");
-  render();
-  if (manterRolagem) {
-    while (ui.mostrados < Math.min(mostrados, ui.lista.length)) maisItens();
-    scrollTo(0, y);
-  }
+  D.geracao = Date.now();
+  render({ manter });
+  if (manter) scrollTo(0, y);
 }
 
 let vigiando = false;
@@ -1201,16 +1498,16 @@ async function vigiar() {
       await new Promise((r) => setTimeout(r, 4000));
       const s = await api("/api/status");
       D.status = s;
-      renderLateral();
+      renderContadores();
       if (!s.rodando) break;
     }
-    if ($("#player").hidden) await carregar(true);
+    if ($("#player").hidden && $("#folha").hidden) await carregar(true);
   } finally {
     vigiando = false;
   }
 }
 
-// Favorito: recebe o que foi coletado numa página do YouTube
+// Favorito antigo (sem extensão): recebe o que foi coletado numa página do YouTube
 function ouvirFavorito() {
   addEventListener("message", async (e) => {
     if (!/^https:\/\/(www|m)\.youtube\.com$/.test(e.origin) || !e.data?.timelineyt) return;
@@ -1220,7 +1517,7 @@ function ouvirFavorito() {
     try {
       const r = await api("/api/importar", { tipo: "pagina", conteudo: e.data.timelineyt });
       avisar(`Importado: ${r.itens} vídeos, ${r.novos} canais novos`);
-      location.hash = "#/inicio";
+      location.hash = "#/agora";
       setTimeout(() => carregar(true), 1500);
       vigiar();
     } catch (err) {
@@ -1230,22 +1527,20 @@ function ouvirFavorito() {
 }
 
 async function iniciar() {
-  if (location.pathname === "/importar-pagina") {
-    history.replaceState(null, "", "/#/importar");
-  }
+  if (location.pathname === "/importar-pagina") history.replaceState(null, "", "/#/importar");
   ouvirFavorito();
   try {
-    const r = await api("/api/visita", {});
+    await api("/api/visita", {});
     await carregar();
-    D.visitaAnterior = r.visitaAnterior;
   } catch (e) {
     $("#lista").replaceChildren(h("div", { class: "vazio" }, h("b", {}, "Não consegui falar com o servidor"), e.message));
     return;
   }
   rota();
   if (D.status.rodando || D.pendentes.length) vigiar();
+  // Dados novos a cada 10 min, sem mexer na tela enquanto você assiste
   setInterval(() => {
-    if ($("#player").hidden && !document.hidden) carregar(true).catch(() => {});
+    if ($("#player").hidden && $("#folha").hidden && !document.hidden) carregar(true).catch(() => {});
   }, 10 * 60e3);
 }
 

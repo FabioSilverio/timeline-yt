@@ -1,9 +1,9 @@
 {
-  "name": "Timeline YT",
+  "name": "Timeline",
   "short_name": "Timeline",
-  "start_url": "/#/inicio",
+  "start_url": "/#/agora",
   "display": "standalone",
-  "background_color": "#0f0f0f",
-  "theme_color": "#0f0f0f",
+  "background_color": "#0c0d10",
+  "theme_color": "#0c0d10",
   "icons": [{ "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml" }]
 }

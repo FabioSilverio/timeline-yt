@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Timeline YT",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Sinaliza vídeos do YouTube para a sua Timeline YT: mais disso, menos disso, assistir depois e o que você assistiu.",
   "permissions": ["storage", "alarms", "contextMenus", "scripting", "activeTab"],
   "host_permissions": [
