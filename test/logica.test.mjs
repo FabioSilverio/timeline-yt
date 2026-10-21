@@ -175,3 +175,23 @@ test("minutagem: descrição, legendas e resposta da IA", async () => {
   assert.equal(escolherModelo(["llama3:8b", "qwen2.5:7b"], ""), "qwen2.5:7b");
   assert.equal(escolherModelo(["llama3:8b", "qwen2.5:7b"], "llama3:8b"), "llama3:8b");
 });
+
+test("em alta, assunto quente e gosto por formato", async () => {
+  const { emAlta, reforcarQuentes } = await import("../public/ordenar.js");
+  const { preferenciasDeFormato } = await import("../lib/ranking.mjs");
+  const agora = Date.parse("2026-10-21T12:00:00Z");
+  const v = (canal, chaves, horas = 2) => ({ canal, chaves, publicado: new Date(agora - horas * 3600e3).toISOString() });
+  const lista = [v("a", ["stf", "lula"]), v("b", ["stf", "moraes"]), v("c", ["stf", "flow"]), v("d", ["lula"]), v("e", ["lula"], 100), v("flow", ["flow"]), v("x", ["flow"])];
+  const alta = emAlta(lista, { agora, minCanais: 2, nomeDoCanal: (id) => (id === "flow" ? "cortes do flow" : "") });
+  assert.deepEqual(alta.map((t) => t.termo), ["stf", "lula", "flow"]);
+  assert.equal(alta.find((t) => t.termo === "flow").canais, 2); // o canal "Cortes do Flow" não conta para "flow"
+
+  const r = reforcarQuentes([{ id: "1", nota: 1, similares: [] }, { id: "2", nota: 0.9, similares: [{}, {}, {}, {}] }]);
+  assert.equal(r[0].id, "2");
+
+  const vistos = Array.from({ length: 10 }, (_, i) => (i < 8 ? ["corte"] : ["podcast", "longo"]));
+  const disp = Array.from({ length: 10 }, (_, i) => (i < 3 ? ["corte"] : ["podcast", "longo"]));
+  const pref = preferenciasDeFormato(vistos, disp);
+  assert.ok(pref.corte > 1.3 && pref.podcast < 0.8, JSON.stringify(pref));
+  assert.deepEqual(preferenciasDeFormato(vistos.slice(0, 5), disp), {}); // poucos vistos: não mexe
+});

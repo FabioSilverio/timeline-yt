@@ -56,6 +56,33 @@ export function agrupar(lista) {
   return reps;
 }
 
+// Assunto coberto por vários canais é o "assunto do momento": o card que o representa sobe um pouco
+export function reforcarQuentes(reps) {
+  return reps
+    .map((r) => (r.similares?.length ? { ...r, nota: r.nota * (1 + Math.min(0.3, 0.06 * r.similares.length)) } : r))
+    .sort((a, b) => b.nota - a.nota);
+}
+
+// Assuntos em alta: palavras-chave que aparecem em vários canais diferentes nas últimas 48 h
+// (palavras do nome do próprio canal, tipo "flow" em "Cortes do Flow", não contam)
+export function emAlta(lista, { n = 10, minCanais = 3, agora = Date.now(), nomeDoCanal = () => "" } = {}) {
+  const canaisPor = new Map();
+  for (const v of lista) {
+    if (agora - Date.parse(v.publicado) > 48 * 3600e3) continue;
+    const nome = nomeDoCanal(v.canal);
+    for (const w of v.chaves || []) {
+      if (w.length < 3 || nome.includes(w)) continue;
+      if (!canaisPor.has(w)) canaisPor.set(w, new Set());
+      canaisPor.get(w).add(v.canal);
+    }
+  }
+  return [...canaisPor.entries()]
+    .filter(([, c]) => c.size >= minCanais)
+    .sort((a, b) => b[1].size - a[1].size)
+    .slice(0, n)
+    .map(([termo, c]) => ({ termo, canais: c.size }));
+}
+
 // Escolha gulosa (estilo MMR): a cada posição, o melhor candidato depois de descontar
 // a parecença com o que acabou de aparecer, canal repetido e tema saturado.
 export function diversificar(lista, { janela = 30, explorar = 6 } = {}) {
@@ -88,6 +115,9 @@ export function diversificar(lista, { janela = 30, explorar = 6 } = {}) {
       for (const u of ultimos) parecido = Math.max(parecido, similaridade(v, u));
       nota *= 1 - 0.75 * parecido;
       if (canaisRecentes.has(v.canal)) nota *= 0.3;
+      // cota por canal: no topo, cada canal aparece no máximo ~2 vezes a cada 30 cards
+      const doCanal = out.slice(-30).filter((u) => u.canal === v.canal).length;
+      if (doCanal >= 2) nota *= Math.pow(0.5, doCanal - 1);
       // tema (ou pessoa) que já apareceu 2 vezes nos últimos 8 cards perde força
       let saturados = 0;
       for (const w of v.chaves || []) if ((contagem.get(w) || 0) >= 2) saturados++;

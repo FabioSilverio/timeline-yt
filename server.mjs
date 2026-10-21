@@ -10,7 +10,7 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { Armazem } from "./lib/armazem.mjs";
 import { Motor } from "./lib/motor.mjs";
-import { montarTimeline } from "./lib/ranking.mjs";
+import { montarTimeline, etiquetas, preferenciasDeFormato } from "./lib/ranking.mjs";
 import { palavras } from "./lib/historico.mjs";
 import { Atualizador } from "./lib/atualizador.mjs";
 import { CATEGORIAS } from "./lib/seed.mjs";
@@ -208,6 +208,7 @@ function payloadTimeline() {
     pesosCategoria: e.ajustes.pesosCategoria,
     exibicoes: e.exibicoes,
     pesoProgramas: e.ajustes.programas === "normal" ? 1 : 0.15,
+    prefFormatos: formatosPreferidos(candidatos),
     agora,
   };
   const videos = montarTimeline(candidatos, ctx).map((v) => ({
@@ -253,6 +254,7 @@ function payloadTimeline() {
     status: motor.status,
     pastaDados: armazem.dir,
     versao: atualizador.info,
+    prefFormatos: ctx.prefFormatos,
     ia: { disponivel: motor.ia.disponivel, modelo: motor.ia.modelo, auto: e.ajustes.ia.auto },
   };
 }
@@ -278,6 +280,16 @@ function resumo() {
 }
 
 // Canal que você nunca viu, salvou nem pediu "mais": candidato a aparecer "para variar"
+// Tags dos vídeos que você viu nos últimos 30 dias x tags do que está disponível
+function formatosPreferidos(candidatos) {
+  const e = E();
+  const limite = Date.now() - 30 * 24 * 3600e3;
+  const tagsDe = (v) => etiquetas(v, e.canais[v.canal]);
+  const vistos = candidatos.filter((v) => e.vistos[v.id] > limite && e.canais[v.canal]).map(tagsDe);
+  const disponiveis = candidatos.filter((v) => !e.vistos[v.id] && e.canais[v.canal]).map(tagsDe);
+  return preferenciasDeFormato(vistos, disponiveis);
+}
+
 function semInteracao(canalId) {
   const c = E().canais[canalId];
   const s = E().stats[canalId] || {};

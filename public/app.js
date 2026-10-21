@@ -1,7 +1,7 @@
 // Timeline — interface. O servidor manda tudo em /api/timeline (com a nota de cada vídeo);
 // aqui as listas são filtradas, agrupadas por assunto e diversificadas (ordenar.js).
 
-import { agrupar, diversificar } from "./ordenar.js?v=__V__";
+import { agrupar, diversificar, reforcarQuentes, emAlta } from "./ordenar.js?v=__V__";
 
 // Se algo quebrar, mostra o erro na tela em vez de deixar a página vazia
 function mostrarErro(msg) {
@@ -136,6 +136,7 @@ const porId = () => new Map(D.videos.map((v) => [v.id, v]));
 
 // ---------- listas ----------
 
+// Filtros de Recentes e da página de canal
 const FILTROS = [
   ["tudo", "Tudo"],
   ["corte", "Cortes"],
@@ -144,7 +145,6 @@ const FILTROS = [
   ["politica", "Política"],
   ["eua", "EUA"],
   ["noticias", "Notícias"],
-  ["economia", "Economia"],
   ["aovivo", "Ao vivo"],
   ["programa", "Programas completos"],
   null,
@@ -153,8 +153,70 @@ const FILTROS = [
   ["novos", "Novos"],
 ];
 
+const catDe = (v) => D.canais[v.canal]?.categoria || "geral";
+// corte de verdade: marcado como corte e curto (até 25 min, quando a duração é conhecida)
+const ehCorte = (v) => v.tags.includes("corte") && !v.tags.includes("programa") && !(v.duracao > 25 * 60);
+const temTag = (t) => (v) => v.tags.includes(t);
+
+// Seções: cada uma com o que entra nela e os filtros que fazem sentido lá dentro
+const SECOES = {
+  cortes: {
+    titulo: "Cortes",
+    sub: "Trechos curtos de política, debates e podcasts, sem programa inteiro.",
+    pega: ehCorte,
+    filtros: [
+      ["tudo", "Todos"],
+      ["br", "Brasil", (v) => !v.tags.includes("eua")],
+      ["eua", "EUA", temTag("eua")],
+      ["debate", "Debates e tretas", temTag("debate")],
+      ["pod", "De podcasts", (v) => ["podcasts", "cortes"].includes(catDe(v))],
+      ["noticias", "Notícias", (v) => catDe(v) === "noticias"],
+      ["rapido", "Até 5 min", (v) => v.duracao && v.duracao <= 300],
+      ["novos", "Novos", (v) => ehNovo(v)],
+    ],
+  },
+  debates: {
+    titulo: "Debates",
+    sub: "Embates, entrevistas tensas, réplicas e tretas.",
+    pega: temTag("debate"),
+    filtros: [
+      ["tudo", "Todos"],
+      ["corte", "Só cortes", temTag("corte")],
+      ["completo", "Completos", (v) => !v.tags.includes("corte")],
+      ["br", "Brasil", (v) => !v.tags.includes("eua")],
+      ["eua", "EUA", temTag("eua")],
+    ],
+  },
+  podcasts: {
+    titulo: "Podcasts",
+    sub: "Episódios e cortes dos podcasts e entrevistas longas.",
+    pega: (v) => v.tags.includes("podcast") || ["podcasts", "cortes"].includes(catDe(v)),
+    filtros: [
+      ["tudo", "Tudo"],
+      ["episodio", "Episódios", (v) => !v.tags.includes("corte")],
+      ["corte", "Cortes de podcast", temTag("corte")],
+      ["eua", "EUA", temTag("eua")],
+    ],
+  },
+  eua: {
+    titulo: "EUA",
+    sub: "Política americana: comentaristas, debates, cortes e podcasts.",
+    pega: temTag("eua"),
+    filtros: [
+      ["tudo", "Tudo"],
+      ["corte", "Cortes", temTag("corte")],
+      ["debate", "Debates", temTag("debate")],
+      ["podcast", "Podcasts", temTag("podcast")],
+    ],
+  },
+};
+
 const TITULOS = {
   agora: "Agora",
+  cortes: "Cortes",
+  debates: "Debates",
+  podcasts: "Podcasts",
+  eua: "EUA",
   recentes: "Recentes",
   fila: "Sua fila",
   continuar: "Continuar",
@@ -181,6 +243,8 @@ function passaBusca(v, q) {
   return semAcento(`${v.titulo} ${c?.titulo || ""} ${v.descricao || ""} ${v.resumo || ""} ${assuntos}`).includes(q);
 }
 
+const passaTema = (v) => !ui.tema || (v.chaves || []).includes(ui.tema);
+
 // O feed nunca mostra o que já foi visto, está na fila ou foi descartado
 function noFeed(v) {
   if (D.vistos[v.id] || D.depois[v.id] || D.ocultos[v.id]) return false;
@@ -188,14 +252,17 @@ function noFeed(v) {
   return true;
 }
 
-// Agora/Recentes: programas completos de TV ficam de fora (a não ser no filtro deles),
-// e no Agora some o que já passou pela tela em 3 visitas sem você tocar
+// Programas completos de TV ficam de fora (a não ser no filtro deles),
+// e some do feed o que já passou pela tela em 3 visitas sem você tocar
 function programaEscondido(v) {
   return v.tags.includes("programa") && (D.ajustes.programas || "esconder") === "esconder" && ui.filtro !== "programa";
 }
 function noAgora(v) {
-  return noFeed(v) && !programaEscondido(v) && !((v.exib || 0) >= 3 && ui.filtro === "tudo" && !ui.busca);
+  return noFeed(v) && !programaEscondido(v) && !((v.exib || 0) >= 3 && !ui.busca && !ui.tema);
 }
+
+// nota do servidor → agrupa a mesma notícia → assunto quente sobe → diversifica
+const ordenarFeed = (lista) => diversificar(reforcarQuentes(agrupar(lista)));
 
 function montarLista() {
   const q = semAcento(ui.busca.trim());
@@ -207,14 +274,19 @@ function montarLista() {
       .sort((a, b) => ordem * (a.ts - b.ts))
       .map((x) => ({ ...x.v, _ts: x.ts, similares: [] }));
 
+  const secao = SECOES[ui.view];
+  if (secao) {
+    const sub = secao.filtros.find((f) => f[0] === ui.filtro)?.[2] || (() => true);
+    return ordenarFeed(D.videos.filter((v) => noAgora(v) && secao.pega(v) && sub(v) && passaTema(v) && passaBusca(v, q)));
+  }
   switch (ui.view) {
-    case "agora": {
-      const base = D.videos.filter((v) => noAgora(v) && passaFiltro(v, ui.filtro) && passaBusca(v, q));
-      return diversificar(agrupar(base)); // D.videos já vem ordenado pela nota
-    }
+    case "agora":
+      return ordenarFeed(D.videos.filter((v) => noAgora(v) && passaTema(v) && passaBusca(v, q)));
     case "recentes":
       return agrupar(
-        D.videos.filter((v) => noFeed(v) && !programaEscondido(v) && passaFiltro(v, ui.filtro) && passaBusca(v, q)).sort((a, b) => Date.parse(b.publicado) - Date.parse(a.publicado)),
+        D.videos
+          .filter((v) => noFeed(v) && !programaEscondido(v) && passaFiltro(v, ui.filtro) && passaTema(v) && passaBusca(v, q))
+          .sort((a, b) => Date.parse(b.publicado) - Date.parse(a.publicado)),
       );
     case "fila":
       return doMapa(D.depois, 1);
@@ -233,12 +305,12 @@ function montarLista() {
   return [];
 }
 
-// A ordem é refeita só quando a tela muda (filtro, busca, dados novos), não a cada clique,
-// para os cards não pularem de lugar.
+// A ordem é refeita só quando a tela muda (filtro, busca, tema, dados novos), não a cada clique,
+// para os cards não pularem de lugar. Cada tela guarda a sua.
 const listasGuardadas = new Map();
 
 function listaAtual(forcar) {
-  const chave = [ui.view, ui.arg, ui.filtro, ui.busca, D.geracao].join("|");
+  const chave = [ui.view, ui.arg, ui.filtro, ui.busca, ui.tema, D.geracao].join("|");
   if (chave !== ui.chave && !forcar) {
     if (ui.chave) listasGuardadas.set(ui.chave, ui.lista);
     ui.chave = chave;
@@ -255,7 +327,7 @@ function listaAtual(forcar) {
   }
   const atual = montarLista();
   const mapa = new Map(atual.map((v) => [v.id, v]));
-  ui.lista = ui.lista.filter((v) => mapa.has(v.id)).map((v) => mapa.get(v.id) && { ...mapa.get(v.id), similares: v.similares.filter((s) => noFeed(s)), paraVariar: v.paraVariar });
+  ui.lista = ui.lista.filter((v) => mapa.has(v.id)).map((v) => ({ ...mapa.get(v.id), similares: (v.similares || []).filter((s) => noFeed(s)), paraVariar: v.paraVariar }));
   return ui.lista;
 }
 
@@ -265,17 +337,31 @@ function agrupador() {
   return null;
 }
 
+// Nome bonito para um termo em alta ("stf" → "STF", "lula" → "Lula"), achado nos próprios títulos
+function rotuloTermo(termo) {
+  let maiusculo = null;
+  for (const v of D.videos) {
+    if (!(v.chaves || []).includes(termo)) continue;
+    const palavra = v.titulo.split(/[^\p{L}\p{N}]+/u).find((w) => semAcento(w) === termo);
+    if (!palavra) continue;
+    if (palavra !== palavra.toUpperCase()) return palavra[0].toUpperCase() + palavra.slice(1); // "Lula", "Moraes"
+    maiusculo ||= palavra;
+  }
+  if (!maiusculo) return termo;
+  return maiusculo.length <= 3 ? maiusculo : maiusculo[0] + maiusculo.slice(1).toLowerCase(); // "STF", mas "Lula"
+}
+
 // ---------- cards ----------
 
 const ROT_TAG = { corte: "Corte", debate: "Debate", podcast: "Podcast", eua: "EUA", aovivo: "Ao vivo", programa: "Programa completo" };
 
-function capa(v, hq) {
+function capa(v, hq, abrir) {
   const prog = D.progresso[v.id];
   const pct = prog ? Math.min(100, (prog.t / prog.d) * 100) : 0;
   const novo = ehNovo(v) && !D.vistos[v.id];
   return h(
     "div",
-    { class: "capa", onclick: () => tocar(v.id) },
+    { class: "capa", onclick: abrir || (() => tocar(v.id)) },
     h("img", { src: miniatura(v.id, hq), alt: "", loading: "lazy", onerror: (e) => (e.target.style.visibility = "hidden") }),
     h("div", { class: "play" }, h("span", {}, icone("play"))),
     h("div", { class: "selo-topo" }, novo && ui.view === "agora" ? h("span", { class: "novo" }, "Novo") : null, v.paraVariar ? h("span", { class: "variar" }, "Para variar") : null),
@@ -347,27 +433,52 @@ function botaoSimilares(v) {
   return h("button", { class: "mais-assunto", onclick: (e) => (e.stopPropagation(), abrirAssunto(v)) }, `+${n} sobre isso`);
 }
 
-function card(v, i) {
+function card(v, i, { compacto = false, fila = null, origem = null } = {}) {
+  const abrir = () => tocar(v.id, fila || ui.itens, origem);
   const el = h(
     "article",
-    { class: "card", tabIndex: -1, dataset: { id: v.id, i } },
+    { class: `card${compacto ? " compacto" : ""}`, tabIndex: -1, dataset: compacto ? { id: v.id } : { id: v.id, i } },
     h("div", { class: "rastro dir" }, "⏱ Fila"),
     h("div", { class: "rastro esq" }, "Vi ✓"),
-    capa(v),
+    capa(v, false, abrir),
     h(
       "div",
       { class: "corpo" },
       linhaCanal(v),
-      h("h3", { title: v.titulo, onclick: () => tocar(v.id) }, v.titulo),
-      textoPorque(v) ? h("div", { class: "porque" }, textoPorque(v)) : null,
-      etiquetas(v),
+      h("h3", { title: v.titulo, onclick: abrir }, v.titulo),
+      !compacto && textoPorque(v) ? h("div", { class: "porque" }, textoPorque(v)) : null,
+      compacto ? null : etiquetas(v),
       botaoSimilares(v),
     ),
     h("div", { class: "acoes" }, acoesDo(v)),
   );
-  el.addEventListener("click", () => selecionar(i, false));
-  if (["agora", "recentes", "canal"].includes(ui.view)) gestos(el, v.id);
+  if (!compacto) el.addEventListener("click", () => selecionar(i, false));
+  if (ui.view === "agora" || ui.view === "recentes" || ui.view === "canal" || SECOES[ui.view]) gestos(el, v.id);
   return el;
+}
+
+// Prateleira: uma fileira com rolagem lateral e "Ver tudo"
+function prateleira(titulo, itens, { link, sub, origem } = {}) {
+  if (!itens.length) return null;
+  const trilha = h("div", { class: "trilha" }, itens.map((v) => card(v, 0, { compacto: true, fila: itens, origem: origem || titulo })));
+  const rolar = (dir) => trilha.scrollBy({ left: dir * trilha.clientWidth * 0.85, behavior: "smooth" });
+  return h(
+    "section",
+    { class: "prateleira" },
+    h(
+      "header",
+      {},
+      h("h2", {}, titulo, sub ? h("small", {}, sub) : null),
+      h(
+        "div",
+        { class: "prateleira-acoes" },
+        h("button", { class: "redondo seta", title: "Voltar", onclick: () => rolar(-1) }, "‹"),
+        h("button", { class: "redondo seta", title: "Avançar", onclick: () => rolar(1) }, "›"),
+        link ? h("a", { class: "ver-tudo", href: link }, "Ver tudo →") : null,
+      ),
+    ),
+    trilha,
+  );
 }
 
 function destaque(v) {
@@ -458,19 +569,20 @@ function renderCabeca() {
   const box = $("#cabeca");
   box.replaceChildren();
   const ferramentas = h("div", { class: "ferramentas" });
+  const secao = SECOES[ui.view];
   const layout = h(
     "button",
     { class: "btn so-largo-btn", title: "Trocar visualização", onclick: () => ((ui.layout = ui.layout === "grade" ? "compacta" : "grade"), gravarLocal("layout", ui.layout), render()) },
     icone(ui.layout === "grade" ? "linhas" : "grade"),
     ui.layout === "grade" ? "Lista" : "Grade",
   );
-  if (["agora", "recentes", "fila", "canal"].includes(ui.view)) {
+  if (secao || ["agora", "recentes", "fila", "canal"].includes(ui.view)) {
     ferramentas.append(h("button", { class: "btn forte", onclick: tocarTudo }, icone("play"), ui.view === "fila" ? "Tocar a fila" : "Tocar em sequência"));
   }
-  if (["agora", "recentes", "canal"].includes(ui.view)) {
+  if (secao || ["recentes", "canal"].includes(ui.view)) {
     ferramentas.append(h("button", { class: "btn", onclick: marcarVisiveis, title: "Marcar como vistos os vídeos carregados na tela" }, icone("vi"), "Limpar tela"));
   }
-  if (!["canais", "importar", "ajustes"].includes(ui.view)) ferramentas.append(layout);
+  if (ui.view !== "agora" && !["canais", "importar", "ajustes"].includes(ui.view)) ferramentas.append(layout);
 
   if (ui.view === "agora") {
     const novos = D.videos.filter((v) => ehNovo(v) && noFeed(v) && !programaEscondido(v)).length;
@@ -479,8 +591,10 @@ function renderCabeca() {
       h(
         "div",
         {},
-        h("h1", {}, saudacao()),
-        h("p", {}, h("b", {}, novos), novos === 1 ? " vídeo novo" : " vídeos novos", " desde a última visita · ", h("b", {}, fila), " na fila"),
+        h("h1", {}, ui.tema ? `Sobre ${rotuloTermo(ui.tema)}` : saudacao()),
+        ui.tema
+          ? h("p", {}, "Tudo o que saiu sobre esse assunto. ", h("button", { class: "link", onclick: () => ((ui.tema = null), render()) }, "Voltar ao Agora"))
+          : h("p", {}, h("b", {}, novos), novos === 1 ? " vídeo novo" : " vídeos novos", " desde a última visita · ", h("b", {}, fila), " na fila"),
       ),
       ferramentas,
     );
@@ -503,39 +617,120 @@ function renderCabeca() {
       ferramentas,
     );
   } else {
-    const sub = {
+    const sub = secao?.sub || {
       recentes: "Tudo o que saiu, do mais novo para o mais antigo.",
       fila: "O que você guardou para assistir depois, na ordem em que guardou.",
       continuar: "Vídeos que você começou e não terminou.",
       historico: "O que você viu aqui e no YouTube (com a extensão).",
       ocultos: "Vídeos que você descartou.",
     }[ui.view];
-    box.append(h("div", {}, h("h1", {}, TITULOS[ui.view] || ""), sub ? h("p", {}, sub) : null));
+    const titulo = (secao?.titulo || TITULOS[ui.view] || "") + (ui.tema ? ` sobre ${rotuloTermo(ui.tema)}` : "");
+    box.append(h("div", {}, h("h1", {}, titulo), sub ? h("p", {}, sub) : null));
     if (ferramentas.childElementCount) box.append(ferramentas);
   }
 }
 
+// Linha de filtros: os da seção (ou os gerais em Recentes/canal) + assuntos em alta
 function renderFiltros() {
   const box = $("#filtros");
   box.replaceChildren();
-  if (!["agora", "recentes", "canal"].includes(ui.view)) return;
-  const base = ui.view === "canal" ? D.videos.filter((v) => v.canal === ui.arg) : D.videos.filter(noFeed);
-  for (const f of FILTROS) {
-    if (!f) {
-      box.append(h("span", { class: "pill-sep" }));
-      continue;
+  const secao = SECOES[ui.view];
+  const pill = (k, rot, n) =>
+    h("button", { class: `pill${ui.filtro === k ? " ativo" : ""}`, onclick: () => ((ui.filtro = ui.filtro === k && k !== "tudo" ? "tudo" : k), render()) }, rot, n ? h("small", {}, n) : null);
+
+  if (secao) {
+    const base = D.videos.filter((v) => noAgora(v) && secao.pega(v) && passaTema(v));
+    for (const [k, rot, f] of secao.filtros) {
+      const n = f ? base.filter(f).length : base.length;
+      if (k !== "tudo" && !n) continue;
+      box.append(pill(k, rot, n));
     }
-    const [k, rot] = f;
-    const esconde = (v) => k !== "programa" && v.tags.includes("programa") && (D.ajustes.programas || "esconder") === "esconder";
-    const n = k === "tudo" ? 0 : base.filter((v) => passaFiltro(v, k) && !esconde(v)).length;
-    if (k !== "tudo" && !n) continue;
-    box.append(h("button", { class: `pill${ui.filtro === k ? " ativo" : ""}`, onclick: () => ((ui.filtro = ui.filtro === k ? "tudo" : k), render()) }, rot, n ? h("small", {}, n) : null));
+  } else if (["recentes", "canal"].includes(ui.view)) {
+    const base = ui.view === "canal" ? D.videos.filter((v) => v.canal === ui.arg) : D.videos.filter(noFeed);
+    for (const f of FILTROS) {
+      if (!f) {
+        box.append(h("span", { class: "pill-sep" }));
+        continue;
+      }
+      const [k, rot] = f;
+      const esconde = (v) => k !== "programa" && v.tags.includes("programa") && (D.ajustes.programas || "esconder") === "esconder";
+      const n = k === "tudo" ? 0 : base.filter((v) => passaFiltro(v, k) && !esconde(v)).length;
+      if (k !== "tudo" && !n) continue;
+      box.append(pill(k, rot, n));
+    }
   }
+
+  // Assuntos em alta (Agora, seções e Recentes), numa linha própria
+  const linhaTemas = $("#temas");
+  linhaTemas.replaceChildren();
+  if (ui.view === "agora" || secao || ui.view === "recentes") {
+    const box = linhaTemas;
+    const pool = D.videos.filter((v) => noAgora(v) && (!secao || secao.pega(v)));
+    const temas = emAlta(pool, { n: 10, nomeDoCanal: (id) => semAcento(D.canais[id]?.titulo || "") });
+    if (ui.tema && !temas.some((t) => t.termo === ui.tema)) temas.unshift({ termo: ui.tema });
+    if (temas.length) {
+      box.append(h("span", { class: "rotulo-alta" }, "🔥 Em alta"));
+      for (const t of temas)
+        box.append(
+          h(
+            "button",
+            { class: `pill tema${ui.tema === t.termo ? " ativo" : ""}`, title: t.canais ? `${t.canais} canais falando disso` : "", onclick: () => ((ui.tema = ui.tema === t.termo ? null : t.termo), scrollTo(0, 0), render()) },
+            rotuloTermo(t.termo),
+          ),
+        );
+    }
+  }
+}
+
+// Agora sem busca nem tema: destaque + prateleiras por formato + "Mais para você"
+function renderPrateleiras() {
+  const dest = $("#destaque");
+  const usados = new Set();
+  const primeiro = ui.lista[0];
+  if (primeiro) {
+    dest.append(destaque(primeiro));
+    usados.add(primeiro.id);
+  }
+  const pegar = (filtro, n) => {
+    const out = [];
+    for (const v of ui.lista) {
+      if (out.length >= n) break;
+      if (!usados.has(v.id) && filtro(v)) out.push(v);
+    }
+    out.forEach((v) => usados.add(v.id));
+    return out;
+  };
+  const ids = porId();
+  const continuar = Object.entries(D.progresso)
+    .sort((a, b) => b[1].ts - a[1].ts)
+    .map(([id]) => ids.get(id))
+    .filter(Boolean)
+    .slice(0, 12);
+  const fila = Object.entries(D.depois)
+    .sort((a, b) => a[1] - b[1])
+    .map(([id]) => ids.get(id))
+    .filter(Boolean)
+    .slice(0, 12);
+  const naoCorte = (v) => !v.tags.includes("corte");
+  const blocos = [
+    prateleira("Continue assistindo", continuar, { link: "#/continuar", origem: "De Continuar" }),
+    prateleira("Cortes rápidos", pegar((v) => ehCorte(v) && !v.tags.includes("eua"), 16), { link: "#/cortes", sub: "o melhor de cada assunto, em poucos minutos" }),
+    prateleira("Debates e tretas", pegar((v) => v.tags.includes("debate") && !v.tags.includes("eua"), 14), { link: "#/debates" }),
+    prateleira("Na sua fila", fila, { link: "#/fila", origem: "Da sua fila" }),
+    prateleira("Podcasts e entrevistas", pegar((v) => (v.tags.includes("podcast") || catDe(v) === "podcasts") && naoCorte(v) && !v.tags.includes("eua"), 12), { link: "#/podcasts" }),
+    prateleira("Política americana", pegar((v) => v.tags.includes("eua"), 14), { link: "#/eua" }),
+    prateleira("Para variar", pegar((v) => v.explorar, 12), { sub: "canais que você ainda não explorou" }),
+  ].filter(Boolean);
+  const caixa = h("div", { class: "prateleiras" }, blocos);
+  dest.append(caixa);
+  ui.itens = ui.lista.filter((v) => !usados.has(v.id));
+  if (ui.itens.length) dest.append(h("h2", { class: "titulo-grade" }, "Mais para você"));
 }
 
 function render({ manter } = {}) {
   if (!D) return;
-  for (const a of $$("[data-v]")) a.classList.toggle("ativo", a.dataset.v === ui.view || (ui.view === "ocultos" && a.dataset.v === "ajustes") || (ui.view === "importar" && a.dataset.v === "ajustes"));
+  for (const a of $$("[data-v]"))
+    a.classList.toggle("ativo", a.dataset.v === ui.view || (["ocultos", "importar"].includes(ui.view) && a.dataset.v === "ajustes") || (a.dataset.v === "mais" && ["recentes", "continuar", "historico", "podcasts", "eua", "canais", "ajustes", "ocultos", "importar"].includes(ui.view)));
   renderContadores();
   renderCabeca();
   renderFiltros();
@@ -550,19 +745,14 @@ function render({ manter } = {}) {
     if (ui.view === "importar") return renderImportar();
     return renderAjustes();
   }
-  lista.className = `lista${ui.layout === "compacta" ? " compacta" : ""}`;
+  lista.className = `lista${ui.layout === "compacta" && ui.view !== "agora" ? " compacta" : ""}`;
 
   const antes = ui.mostrados;
   listaAtual();
+  ui.itens = ui.lista;
   ui.mostrados = 0;
   if (!ui.lista.length) return lista.append(vazio());
-  let inicio = 0;
-  if (ui.view === "agora" && !ui.busca && ui.layout === "grade") {
-    dest.append(destaque(ui.lista[0]));
-    inicio = 1;
-  }
-  ui.inicio = inicio;
-  ui.mostrados = inicio;
+  if (ui.view === "agora" && !ui.busca && !ui.tema) renderPrateleiras();
   maisItens(manter ? Math.max(antes, LOTE) : LOTE);
   observarExibicoes();
 }
@@ -570,10 +760,11 @@ function render({ manter } = {}) {
 function maisItens(qtd = LOTE) {
   const lista = $("#lista");
   const grupo = agrupador();
-  const ate = Math.min(ui.lista.length, ui.mostrados + qtd);
-  let ultimo = ui.mostrados > ui.inicio ? grupo?.(ui.lista[ui.mostrados - 1]) : null;
+  const itens = ui.itens || [];
+  const ate = Math.min(itens.length, ui.mostrados + qtd);
+  let ultimo = ui.mostrados > 0 ? grupo?.(itens[ui.mostrados - 1]) : null;
   for (let i = ui.mostrados; i < ate; i++) {
-    const v = ui.lista[i];
+    const v = itens[i];
     if (grupo) {
       const g = grupo(v);
       if (g !== ultimo) lista.append(h("div", { class: "grupo-data" }, g));
@@ -600,6 +791,8 @@ function vazio() {
     ocultos: ["🙈", "Nenhum vídeo oculto", ""],
     canal: ["📺", "Sem vídeos deste canal", "O feed dele pode não ter sido lido ainda."],
   };
+  if (SECOES[ui.view])
+    msgs[ui.view] = ui.filtro !== "tudo" || ui.tema || ui.busca ? ["🔎", "Nada com esse filtro", "Tente outro filtro ou outro assunto."] : ["🎉", "Nada novo aqui", "Você já viu tudo desta seção. Quando sair coisa nova, aparece aqui."];
   const [e, t, s] = msgs[ui.view] || ["", "Nada aqui", ""];
   return h("div", { class: "vazio" }, h("span", { class: "emoji" }, e), h("b", {}, t), s);
 }
@@ -729,7 +922,7 @@ async function editarCanal(id, mudancas, msg) {
 }
 
 function marcarVisiveis() {
-  const alvo = ui.lista.slice(0, ui.mostrados).filter((v) => !D.vistos[v.id]);
+  const alvo = ui.itens.slice(0, ui.mostrados).filter((v) => !D.vistos[v.id]);
   if (!alvo.length || !confirm(`Marcar ${alvo.length} vídeos como vistos?`)) return;
   for (const v of alvo) D.vistos[v.id] = Date.now();
   api("/api/acao", { lote: alvo.map((v) => ({ tipo: "visto", id: v.id })) }).catch((e) => avisar(e.message, null, true));
@@ -875,11 +1068,11 @@ function carregarApiYT() {
 const P = { player: null, id: null, fila: [], origem: "", timer: null, ultimoEnvio: 0, modo: null, historico: false, contados: new Set() };
 
 function tocarTudo() {
-  const lista = ui.lista.filter((v) => !D.vistos[v.id] || ui.view === "fila");
+  const lista = (ui.view === "agora" && !ui.busca && !ui.tema ? ui.lista : ui.itens).filter((v) => !D.vistos[v.id] || ui.view === "fila");
   if (lista.length) tocar(lista[0].id, lista);
 }
 
-const ORIGENS = { agora: "Do Agora", recentes: "De Recentes", fila: "Da sua fila", continuar: "De Continuar", historico: "De Vistos", ocultos: "De Ocultos", canal: "Do canal" };
+const ORIGENS = { cortes: "De Cortes", debates: "De Debates", podcasts: "De Podcasts", eua: "De EUA", agora: "Do Agora", recentes: "De Recentes", fila: "Da sua fila", continuar: "De Continuar", historico: "De Vistos", ocultos: "De Ocultos", canal: "Do canal" };
 
 async function tocar(id, fila, origem) {
   const v = D.videos.find((x) => x.id === id);
@@ -888,7 +1081,7 @@ async function tocar(id, fila, origem) {
     P.fila = fila.map((x) => x.id);
     P.origem = origem || ORIGENS[ui.view] || "";
   } else if (!P.fila.includes(id)) {
-    P.fila = ui.lista.map((x) => x.id);
+    P.fila = (ui.itens || ui.lista).map((x) => x.id);
     P.origem = ORIGENS[ui.view] || "";
   }
   if (!P.fila.includes(id)) P.fila.unshift(id);
@@ -1649,6 +1842,32 @@ function renderAjustes() {
 
 // ---------- navegação ----------
 
+// Celular: "Mais" abre as seções que não cabem na barra de baixo
+function abrirMais() {
+  const corpo = $("#folha-corpo");
+  $("#folha-titulo").textContent = "Seções";
+  const item = (href, emoji, rot, desc) => h("a", { class: "item-mais", href }, h("span", { class: "emoji" }, emoji), h("span", {}, h("b", {}, rot), h("small", {}, desc)));
+  corpo.replaceChildren(
+    h(
+      "div",
+      { class: "grade-mais" },
+      item("#/podcasts", "🎙️", "Podcasts", "episódios e cortes de podcast"),
+      item("#/eua", "🇺🇸", "EUA", "política americana"),
+      item("#/recentes", "🕐", "Recentes", "tudo, do mais novo ao mais antigo"),
+      item("#/continuar", "▶️", "Continuar", "o que você parou no meio"),
+      item("#/historico", "✓", "Vistos", "seu histórico"),
+      item("#/canais", "📺", "Canais", "adicionar, priorizar, silenciar"),
+      item("#/ajustes", "⚙️", "Ajustes", "IA local, preferências, versão"),
+      item("#/importar", "⬇️", "Importar", "histórico e extensão"),
+    ),
+  );
+  $("#folha").hidden = false;
+}
+function fecharMais() {
+  if ($("#folha-titulo").textContent === "Seções") fecharFolha();
+}
+$("#btn-mais").onclick = abrirMais;
+
 // Cada tela lembra onde você estava (rolagem, filtro e quantos cards já tinham carregado)
 const lugares = new Map();
 
@@ -1658,7 +1877,7 @@ function rota() {
   if (!TITULOS[v] && v !== "canal") v = "agora";
   const arg = partes[1] || null;
   const mudou = v !== ui.view || arg !== ui.arg;
-  if (mudou && D) lugares.set(`${ui.view}|${ui.arg}`, { y: scrollY, mostrados: ui.mostrados, filtro: ui.filtro });
+  if (mudou && D) lugares.set(`${ui.view}|${ui.arg}`, { y: scrollY, mostrados: ui.mostrados, filtro: ui.filtro, tema: ui.tema });
   if (P.modo === "cheio") {
     P.historico = false; // a navegação já criou a própria entrada no histórico
     minimizar();
@@ -1669,6 +1888,8 @@ function rota() {
   if (!mudou) return render();
   const lugar = lugares.get(`${v}|${arg}`);
   ui.filtro = lugar?.filtro || "tudo";
+  ui.tema = lugar?.tema || null;
+  fecharMais();
   ui.sel = -1;
   ui.mostrados = lugar?.mostrados || 0;
   render({ manter: !!lugar });
@@ -1698,7 +1919,7 @@ addEventListener("keydown", (e) => {
     if (e.key === "f" || e.key === "d") $("#pl-depois").click();
     return;
   }
-  const v = ui.lista[ui.sel];
+  const v = ui.itens?.[ui.sel];
   switch (e.key) {
     case "j":
       if (ui.sel + 1 >= ui.mostrados) maisItens();
@@ -1733,7 +1954,7 @@ addEventListener("keydown", (e) => {
 });
 
 new IntersectionObserver((ent) => {
-  if (ent[0].isIntersecting && D && ui.mostrados < ui.lista.length) maisItens();
+  if (ent[0].isIntersecting && D && ui.mostrados < (ui.itens || []).length) maisItens();
 }, { rootMargin: "900px" }).observe($("#sentinela"));
 
 $("#busca").addEventListener("input", (e) => {

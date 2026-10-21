@@ -9,6 +9,11 @@ próprio da Cloudflare em **https://yt.faaretz.site** (separado do túnel dos ou
 
 ## O que tem
 
+- **Seções**: **Agora** em prateleiras (destaque, Continue assistindo, Cortes rápidos, Debates e tretas,
+  Na sua fila, Podcasts e entrevistas, Política americana, Para variar, e embaixo "Mais para você"), e as
+  seções **Cortes**, **Debates**, **Podcasts** e **EUA**, cada uma com filtros próprios (ex.: Cortes →
+  Brasil, EUA, Debates e tretas, De podcasts, Notícias, Até 5 min). **🔥 Em alta**: os assuntos que vários
+  canais estão cobrindo nas últimas 48 h; um toque mostra tudo sobre aquele assunto.
 - **Agora**: o feed. Um destaque no topo ("sua melhor escolha agora") e cards com ações sempre à mão:
   **Vi**, **Fila** e **Menos**. O que você marca sai do feed na hora, com animação e "Desfazer".
   No celular dá para arrastar o card: para a direita vai para a fila, para a esquerda marca como visto.
