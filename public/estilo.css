@@ -266,7 +266,30 @@ h1, h2, h3 { font-family: "Space Grotesk", Inter, sans-serif; letter-spacing: -.
 
 /* ---------- player ---------- */
 .player { position: fixed; inset: 0; z-index: 50; background: var(--fundo); overflow-y: auto; animation: aparece .15s; }
-.player-topo { position: sticky; top: 0; display: flex; justify-content: flex-end; padding: 14px 18px 0; z-index: 2; }
+.player-topo {
+  position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 14px; padding: 12px 28px;
+  background: color-mix(in srgb, var(--fundo) 88%, transparent); backdrop-filter: blur(12px); max-width: 1696px; margin: 0 auto;
+}
+.pl-origem { color: var(--texto-2); font-size: 13.5px; font-weight: 500; }
+.pl-topo-dir { margin-left: auto; display: flex; gap: 8px; }
+.pl-navega { display: flex; align-items: center; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.pl-estado { color: var(--visto); font-size: 13px; font-weight: 600; margin-left: 6px; }
+.pl-mini { display: none; }
+
+/* mini player: o vídeo continua tocando no canto enquanto você navega */
+.player.mini {
+  inset: auto 20px 20px auto; width: min(420px, calc(100vw - 32px)); overflow: visible; background: transparent; animation: none; z-index: 45;
+}
+.player.mini .player-topo, .player.mini .pl-info, .player.mini .player-lado { display: none; }
+.player.mini .player-caixa { padding: 0; display: block; }
+.player.mini .player-video { border-radius: 16px 16px 0 0; box-shadow: none; }
+.player.mini .pl-mini {
+  display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 14px; background: var(--superficie-2);
+  border: 1px solid var(--linha); border-top: 0; border-radius: 0 0 16px 16px; box-shadow: var(--sombra);
+}
+.player.mini .pl-mini .redondo { width: 34px; height: 34px; border-radius: 10px; flex: none; }
+.player.mini .pl-mini .redondo svg { width: 18px; height: 18px; }
+.pl-mini-titulo { flex: 1; min-width: 0; text-align: left; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-caixa { display: flex; gap: 28px; padding: 0 28px 28px; max-width: 1640px; margin: 0 auto; }
 .player-esq { flex: 1; min-width: 0; }
 .player-video { aspect-ratio: 16 / 9; background: #000; border-radius: 22px; overflow: hidden; box-shadow: var(--sombra); }
@@ -378,6 +401,10 @@ textarea { width: 100%; min-height: 110px; resize: vertical; font-family: ui-mon
   .canal-linha { grid-template-columns: 38px 1fr auto; }
   .canal-linha .peso, .canal-linha select { grid-column: 2 / -1; }
   .player-caixa { padding: 0 0 24px; gap: 16px; }
+  .player-topo { padding: 8px 12px; gap: 8px; }
+  .player-topo .btn span { display: none; }
+  .pl-origem { font-size: 12px; }
+  .player.mini { right: 10px; bottom: 76px; width: min(330px, calc(100vw - 20px)); }
   .player-video { border-radius: 0; }
   .pl-info, .player-lado { padding: 0 14px; }
   .segmentos { margin-left: 0; }

@@ -51,27 +51,45 @@
 
   <div class="player" id="player" hidden>
     <div class="player-topo">
-      <button class="redondo" id="pl-fechar" title="Fechar (Esc)" aria-label="Fechar">
-        <svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      <button class="btn" id="pl-voltar" title="Voltar ao feed com o vídeo tocando no canto (Esc)">
+        <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg><span>Voltar</span>
       </button>
+      <span class="pl-origem" id="pl-origem"></span>
+      <div class="pl-topo-dir">
+        <button class="redondo" id="pl-minimizar" title="Minimizar e continuar navegando" aria-label="Minimizar">
+          <svg viewBox="0 0 24 24"><path d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z"/></svg>
+        </button>
+        <button class="redondo" id="pl-fechar" title="Parar e fechar" aria-label="Fechar"><svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+      </div>
     </div>
     <div class="player-caixa">
       <div class="player-esq">
         <div class="player-video"><div id="yt-alvo"></div></div>
+        <div class="pl-mini" id="pl-mini">
+          <button class="pl-mini-titulo" id="pl-mini-titulo" title="Abrir o player"></button>
+          <button class="redondo" id="pl-mini-prox" title="Próximo (n)" aria-label="Próximo"><svg viewBox="0 0 24 24"><path d="m6 18 8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+          <button class="redondo" id="pl-mini-abrir" title="Abrir" aria-label="Abrir"><svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg></button>
+          <button class="redondo" id="pl-mini-fechar" title="Fechar" aria-label="Fechar"><svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+        </div>
         <div class="pl-info">
+          <div class="pl-navega">
+            <button class="btn" id="pl-anterior" title="Anterior (p)"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg><span>Anterior</span></button>
+            <button class="btn forte" id="pl-proximo" title="Próximo (n)"><span>Próximo</span><svg viewBox="0 0 24 24"><path d="m6 18 8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+            <span class="pl-estado" id="pl-estado"></span>
+          </div>
           <h2 id="pl-titulo"></h2>
           <p class="pl-meta"><a id="pl-canal"></a> <span id="pl-meta"></span></p>
           <div class="pl-botoes">
-            <button class="btn forte" id="pl-visto-prox">✓ Vi · próximo</button>
-            <button class="btn" id="pl-depois">⏱ Fila</button>
+            <button class="btn" id="pl-depois"></button>
+            <button class="btn" id="pl-mais">👍 Mais disso</button>
             <button class="btn" id="pl-menos">✕ Menos disso</button>
-            <a class="btn" id="pl-yt" target="_blank" rel="noopener">Abrir no YouTube ↗</a>
-            <div class="segmentos" id="pl-vel"></div>
+            <a class="btn" id="pl-yt" target="_blank" rel="noopener">YouTube ↗</a>
+            <div class="segmentos" id="pl-vel" title="Velocidade"></div>
           </div>
         </div>
       </div>
       <aside class="player-lado">
-        <h3>A seguir</h3>
+        <h3 id="pl-lado-titulo">A seguir</h3>
         <div id="pl-fila" class="pl-fila"></div>
       </aside>
     </div>

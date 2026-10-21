@@ -234,9 +234,20 @@ function montarLista() {
 
 // A ordem é refeita só quando a tela muda (filtro, busca, dados novos), não a cada clique,
 // para os cards não pularem de lugar.
+const listasGuardadas = new Map();
+
 function listaAtual(forcar) {
   const chave = [ui.view, ui.arg, ui.filtro, ui.busca, D.geracao].join("|");
-  if (forcar || chave !== ui.chave) {
+  if (chave !== ui.chave && !forcar) {
+    if (ui.chave) listasGuardadas.set(ui.chave, ui.lista);
+    ui.chave = chave;
+    const guardada = listasGuardadas.get(chave);
+    if (!guardada) {
+      ui.lista = montarLista();
+      return ui.lista;
+    }
+    ui.lista = guardada;
+  } else if (forcar) {
     ui.chave = chave;
     ui.lista = montarLista();
     return ui.lista;
@@ -858,25 +869,33 @@ function carregarApiYT() {
   return ytApi;
 }
 
-const P = { player: null, id: null, fila: [], timer: null, ultimoEnvio: 0 };
+// modo: null (fechado) | "cheio" | "mini" (canto da tela, continua tocando enquanto você navega)
+const P = { player: null, id: null, fila: [], origem: "", timer: null, ultimoEnvio: 0, modo: null, historico: false, contados: new Set() };
 
 function tocarTudo() {
-  const lista = ui.lista.filter((v) => !D.vistos[v.id]);
+  const lista = ui.lista.filter((v) => !D.vistos[v.id] || ui.view === "fila");
   if (lista.length) tocar(lista[0].id, lista);
 }
 
-async function tocar(id, fila) {
+const ORIGENS = { agora: "Do Agora", recentes: "De Recentes", fila: "Da sua fila", continuar: "De Continuar", historico: "De Vistos", ocultos: "De Ocultos", canal: "Do canal" };
+
+async function tocar(id, fila, origem) {
   const v = D.videos.find((x) => x.id === id);
   if (!v) return;
-  P.fila = (fila || ui.lista).map((x) => x.id);
+  if (fila) {
+    P.fila = fila.map((x) => x.id);
+    P.origem = origem || ORIGENS[ui.view] || "";
+  } else if (!P.fila.includes(id)) {
+    P.fila = ui.lista.map((x) => x.id);
+    P.origem = ORIGENS[ui.view] || "";
+  }
   if (!P.fila.includes(id)) P.fila.unshift(id);
   P.id = id;
-  $("#player").hidden = false;
-  $("#player").scrollTo(0, 0);
-  document.body.style.overflow = "hidden";
+  abrirCheio();
   preencherPlayer(v);
   const YT = await carregarApiYT();
-  const inicio = D.progresso[id] && D.progresso[id].t < D.progresso[id].d - 20 ? D.progresso[id].t : 0;
+  const prog = D.progresso[id];
+  const inicio = prog && prog.t < prog.d - 20 ? prog.t : 0;
   if (P.player?.loadVideoById) {
     P.player.loadVideoById({ videoId: id, startSeconds: inicio });
   } else {
@@ -897,17 +916,75 @@ async function tocar(id, fila) {
     });
   }
   clearInterval(P.timer);
-  P.timer = setInterval(salvarProgresso, 5000);
+  P.timer = setInterval(acompanhar, 4000);
 }
+
+function abrirCheio() {
+  const el = $("#player");
+  el.hidden = false;
+  el.classList.remove("mini");
+  el.scrollTo(0, 0);
+  document.body.style.overflow = "hidden";
+  P.modo = "cheio";
+  // o "voltar" do navegador/celular minimiza o player em vez de sair do site
+  if (!P.historico) {
+    history.pushState({ timelinePlayer: true }, "");
+    P.historico = true;
+  }
+}
+
+function sairDoHistorico() {
+  if (!P.historico) return;
+  P.historico = false;
+  history.back();
+}
+
+function minimizar() {
+  if (P.modo !== "cheio") return;
+  $("#player").classList.add("mini");
+  document.body.style.overflow = "";
+  P.modo = "mini";
+  sairDoHistorico();
+  render({ manter: true });
+}
+
+function fecharPlayer() {
+  if (!P.modo) return;
+  acompanhar(true);
+  clearInterval(P.timer);
+  P.player?.stopVideo?.();
+  $("#player").hidden = true;
+  $("#player").classList.remove("mini");
+  document.body.style.overflow = "";
+  P.modo = null;
+  P.id = null;
+  sairDoHistorico();
+  render({ manter: true });
+}
+
+addEventListener("popstate", () => {
+  if (!P.historico) return;
+  P.historico = false;
+  minimizar();
+});
 
 function preencherPlayer(v) {
   const c = D.canais[v.canal] || {};
+  const i = P.fila.indexOf(v.id);
   $("#pl-titulo").textContent = v.titulo;
+  $("#pl-mini-titulo").textContent = v.titulo;
   $("#pl-canal").textContent = c.titulo || "";
   $("#pl-canal").href = `#/canal/${v.canal}`;
   $("#pl-meta").textContent = [v.views ? `· ${fmtNum.format(v.views)} views` : null, `· ${ha(v.publicado)}`, v.duracao ? `· ${duracao(v.duracao)}` : null].filter(Boolean).join(" ");
+  $("#pl-origem").textContent = P.fila.length > 1 ? `${P.origem} · ${i + 1} de ${P.fila.length}` : P.origem;
   $("#pl-yt").href = linkYT(v.id);
-  $("#pl-depois").textContent = D.depois[v.id] ? "⏱ Na fila" : "⏱ Fila";
+  $("#pl-depois").textContent = D.depois[v.id] ? "⏱ Tirar da fila" : "⏱ Guardar na fila";
+  $("#pl-estado").textContent = D.vistos[v.id] ? "✓ Contado como visto" : D.ajustes.marcarAoTerminar !== false ? "vira visto aos 20 s" : "";
+  $("#pl-anterior").disabled = i <= 0;
+  const prox = proximos(12);
+  $("#pl-proximo").disabled = !prox.length;
+  $("#pl-mini-prox").disabled = !prox.length;
+  $("#pl-lado-titulo").textContent = P.origem === ORIGENS.fila ? "A seguir na fila" : "A seguir";
   $("#pl-vel").replaceChildren(
     ...[1, 1.25, 1.5, 1.75, 2].map((x) =>
       h(
@@ -925,18 +1002,17 @@ function preencherPlayer(v) {
       ),
     ),
   );
-  const prox = proximos(10);
   $("#pl-fila").replaceChildren(
-    ...prox.map((p) =>
+    ...prox.map((p, n) =>
       h(
         "div",
-        { class: "pl-item", onclick: () => tocar(p.id, P.fila.map((id) => ({ id }))) },
+        { class: "pl-item", onclick: () => tocar(p.id) },
         h("div", { class: "capa" }, h("img", { src: miniatura(p.id), alt: "", loading: "lazy" }), p.duracao ? h("span", { class: "selo-tempo" }, duracao(p.duracao)) : null),
-        h("div", {}, h("b", {}, p.titulo), h("small", {}, `${D.canais[p.canal]?.titulo || ""} · ${ha(p.publicado)}`)),
+        h("div", {}, h("b", {}, p.titulo), h("small", {}, `${n === 0 ? "Próximo · " : ""}${D.canais[p.canal]?.titulo || ""} · ${ha(p.publicado)}`)),
       ),
     ),
   );
-  if (!prox.length) $("#pl-fila").append(h("p", { class: "pl-meta" }, "Fim da lista."));
+  if (!prox.length) $("#pl-fila").append(h("p", { class: "pl-meta" }, "Fim da lista. Feche ou escolha outro vídeo no feed."));
 }
 
 function proximos(n) {
@@ -949,66 +1025,87 @@ function proximos(n) {
   return out;
 }
 
-function salvarProgresso(forcar) {
+// A cada 4 s: guarda onde parou e, depois de 20 s assistidos, conta como visto
+// (sai da fila na hora; se você parar no meio, fica em Continuar)
+function acompanhar(fechando) {
   const pl = P.player;
-  if (!pl?.getCurrentTime || !P.id) return;
+  const id = P.id;
+  if (!pl?.getCurrentTime || !id) return;
   const t = pl.getCurrentTime();
   const d = pl.getDuration();
   if (!d) return;
-  if (t >= 15) D.progresso[P.id] = { t, d, ts: Date.now() };
-  if (forcar || Date.now() - P.ultimoEnvio > 15000) {
-    P.ultimoEnvio = Date.now();
-    enviarAcao("progresso", P.id, { t, d });
+  if (t >= 15 && t / d < 0.92) D.progresso[id] = { t, d, ts: Date.now() };
+  else if (t / d >= 0.92) delete D.progresso[id];
+  if (D.ajustes.marcarAoTerminar !== false && !P.contados.has(id) && t >= Math.min(20, d * 0.5)) {
+    P.contados.add(id);
+    if (!D.vistos[id]) {
+      const estavaNaFila = !!D.depois[id];
+      D.vistos[id] = Date.now();
+      delete D.depois[id];
+      enviarAcao("visto", id);
+      if (estavaNaFila) avisar("Saiu da fila e foi para Vistos");
+      const v = D.videos.find((x) => x.id === id);
+      if (v) preencherPlayer(v);
+      if (P.modo === "mini") render({ manter: true });
+    }
   }
-  return { t, d };
-}
-
-function vistoSilencioso(id) {
-  if (D.vistos[id]) return;
-  D.vistos[id] = Date.now();
-  delete D.depois[id];
-  delete D.progresso[id];
-  enviarAcao("visto", id);
+  if (fechando || Date.now() - P.ultimoEnvio > 12000) {
+    P.ultimoEnvio = Date.now();
+    enviarAcao("progresso", id, { t, d });
+  }
 }
 
 function terminou() {
-  if (D.ajustes.marcarAoTerminar) vistoSilencioso(P.id);
+  if (P.id) {
+    delete D.progresso[P.id];
+    const d = P.player?.getDuration?.() || 1;
+    enviarAcao("progresso", P.id, { t: d, d });
+    if (!D.vistos[P.id] && D.ajustes.marcarAoTerminar !== false) {
+      D.vistos[P.id] = Date.now();
+      delete D.depois[P.id];
+      enviarAcao("visto", P.id);
+    }
+  }
   if (D.ajustes.autoplay) proximo();
 }
 
 function proximo() {
+  acompanhar(true);
   const [p] = proximos(1);
-  if (p) tocar(p.id, P.fila.map((id) => ({ id })));
-  else fecharPlayer();
+  if (p) tocar(p.id);
+  else if (P.modo === "mini") fecharPlayer();
 }
 
-function fecharPlayer() {
-  const r = salvarProgresso(true);
-  if (r && r.d && r.t / r.d > 0.92) vistoSilencioso(P.id);
-  clearInterval(P.timer);
-  P.player?.stopVideo?.();
-  $("#player").hidden = true;
-  document.body.style.overflow = "";
-  P.id = null;
-  render({ manter: true });
+function anterior() {
+  acompanhar(true);
+  const i = P.fila.indexOf(P.id);
+  if (i > 0) tocar(P.fila[i - 1]);
 }
 
+$("#pl-voltar").onclick = minimizar;
+$("#pl-minimizar").onclick = minimizar;
 $("#pl-fechar").onclick = fecharPlayer;
-$("#pl-visto-prox").onclick = () => {
-  vistoSilencioso(P.id);
-  proximo();
-};
+$("#pl-mini-fechar").onclick = fecharPlayer;
+$("#pl-mini-abrir").onclick = () => P.id && (abrirCheio(), preencherPlayer(D.videos.find((x) => x.id === P.id)));
+$("#pl-mini-titulo").onclick = () => $("#pl-mini-abrir").click();
+$("#pl-mini-prox").onclick = proximo;
+$("#pl-proximo").onclick = proximo;
+$("#pl-anterior").onclick = anterior;
 $("#pl-depois").onclick = () => {
-  if (D.depois[P.id]) delete D.depois[P.id], enviarAcao("tirar-depois", P.id);
-  else (D.depois[P.id] = Date.now()), enviarAcao("depois", P.id);
-  preencherPlayer(D.videos.find((x) => x.id === P.id));
+  const id = P.id;
+  if (D.depois[id]) delete D.depois[id], enviarAcao("tirar-depois", id);
+  else (D.depois[id] = Date.now()), enviarAcao("depois", id), delete D.vistos[id], P.contados.add(id);
+  preencherPlayer(D.videos.find((x) => x.id === id));
 };
+$("#pl-mais").onclick = () => maisDisso(P.id);
 $("#pl-menos").onclick = () => {
   const id = P.id;
   D.ocultos[id] = Date.now();
   api("/api/sinal", { tipo: "menos", id }).catch(() => {});
   avisar("Entendido: menos disso");
-  proximo();
+  const [p] = proximos(1);
+  if (p) tocar(p.id);
+  else fecharPlayer();
 };
 
 // ---------- páginas de gestão ----------
@@ -1335,7 +1432,7 @@ function renderAjustes() {
       h("h2", {}, "Timeline"),
       chave("Esconder Shorts", "Shorts não entram na timeline.", "esconderShorts"),
       chave("Tocar o próximo sozinho", "Ao terminar um vídeo, já começa o seguinte da lista.", "autoplay"),
-      chave("Marcar como visto ao terminar", "Também marca quando você fecha depois de ver mais de 92%.", "marcarAoTerminar"),
+      chave("Assistiu, contou como visto", "Depois de 20 segundos assistindo no player, o vídeo sai da fila e vai para Vistos. Se parar no meio, fica em Continuar.", "marcarAoTerminar"),
       chave("Ler a duração dos vídeos", "Separa cortes curtos de podcasts longos. Abre a página de cada vídeo novo, devagar.", "detalhes"),
       numero("Buscar vídeos novos a cada (min)", "Mínimo 5.", "intervaloMin", 5, 240),
       numero("Mostrar vídeos dos últimos (dias)", "Vídeos salvos para depois ficam sempre.", "diasMax", 2, 60),
@@ -1432,19 +1529,30 @@ function renderAjustes() {
 
 // ---------- navegação ----------
 
+// Cada tela lembra onde você estava (rolagem, filtro e quantos cards já tinham carregado)
+const lugares = new Map();
+
 function rota() {
   const partes = location.hash.replace(/^#\/?/, "").split("/");
   let v = APELIDOS[partes[0]] || partes[0] || "agora";
   if (!TITULOS[v] && v !== "canal") v = "agora";
-  if (v !== ui.view || partes[1] !== ui.arg) {
-    ui.filtro = "tudo";
-    ui.sel = -1;
-    window.scrollTo(0, 0);
+  const arg = partes[1] || null;
+  const mudou = v !== ui.view || arg !== ui.arg;
+  if (mudou && D) lugares.set(`${ui.view}|${ui.arg}`, { y: scrollY, mostrados: ui.mostrados, filtro: ui.filtro });
+  if (P.modo === "cheio") {
+    P.historico = false; // a navegação já criou a própria entrada no histórico
+    minimizar();
   }
   ui.view = v;
-  ui.arg = partes[1] || null;
+  ui.arg = arg;
   fecharFolha();
-  render();
+  if (!mudou) return render();
+  const lugar = lugares.get(`${v}|${arg}`);
+  ui.filtro = lugar?.filtro || "tudo";
+  ui.sel = -1;
+  ui.mostrados = lugar?.mostrados || 0;
+  render({ manter: !!lugar });
+  scrollTo(0, lugar?.y || 0);
 }
 addEventListener("hashchange", rota);
 
@@ -1462,11 +1570,11 @@ addEventListener("keydown", (e) => {
     if (e.key === "Escape") e.target.blur();
     return;
   }
-  const aberto = !$("#player").hidden;
-  if (e.key === "Escape") return aberto ? fecharPlayer() : (fecharMenu(), fecharFolha());
-  if (aberto) {
-    if (e.key === "n") proximo();
-    if (e.key === "v") $("#pl-visto-prox").click();
+  const cheio = P.modo === "cheio";
+  if (e.key === "Escape") return cheio ? minimizar() : (fecharMenu(), fecharFolha());
+  if (P.modo && e.key === "n") return proximo();
+  if (cheio) {
+    if (e.key === "p") anterior();
     if (e.key === "f" || e.key === "d") $("#pl-depois").click();
     return;
   }
@@ -1535,6 +1643,7 @@ async function carregar(manter) {
   for (const k of ["vistos", "depois", "ocultos", "progresso", "canais", "categorias"]) D[k] ||= {};
   D.status ||= {};
   D.geracao = Date.now();
+  listasGuardadas.clear();
   render({ manter });
   if (manter) scrollTo(0, y);
 }
@@ -1551,7 +1660,7 @@ async function vigiar() {
       renderContadores();
       if (!s.rodando) break;
     }
-    if ($("#player").hidden && $("#folha").hidden) await carregar(true);
+    if (P.modo !== "cheio" && $("#folha").hidden) await carregar(true);
   } finally {
     vigiando = false;
   }
@@ -1590,7 +1699,7 @@ async function iniciar() {
   if (D.status.rodando || D.pendentes.length) vigiar();
   // Dados novos a cada 10 min, sem mexer na tela enquanto você assiste
   setInterval(() => {
-    if ($("#player").hidden && $("#folha").hidden && !document.hidden) carregar(true).catch(() => {});
+    if (P.modo !== "cheio" && $("#folha").hidden && !document.hidden) carregar(true).catch(() => {});
   }, 10 * 60e3);
 }
 

@@ -300,7 +300,7 @@ function acao({ tipo, id, t, d }) {
     }
     case "progresso":
       if (Number.isFinite(t) && Number.isFinite(d) && d > 0) {
-        if (t < 15) delete e.progresso[id];
+        if (t < 15 || t / d >= 0.92) delete e.progresso[id];
         else e.progresso[id] = { t: Math.round(t), d: Math.round(d), ts: agora };
         if (v && !v.duracao) v.duracao = Math.round(d);
       }
