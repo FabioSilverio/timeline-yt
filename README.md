@@ -30,6 +30,16 @@ próprio da Cloudflare em **https://yt.faaretz.site** (separado do túnel dos ou
 - **Canais**, **Importar histórico** e **Ajustes** (pesos por categoria, assuntos preferidos, palavras
   bloqueadas, sinais dados, backup, versão).
 - Atalhos: `j`/`k` navegar, `Enter` assistir, `v` vi, `f` fila, `x` menos, `/` buscar, `r` atualizar, `n` próximo.
+- **Minutagem com IA local (Ollama)**: para vídeos com mais de 6 minutos, o servidor lê as legendas
+  (ou usa o yt-dlp, se estiver instalado) e pede ao Ollama do PC os assuntos com o minuto em que cada um
+  começa, mais um resumo. No player, os assuntos viram botões que pulam para aquele trecho, e o assunto
+  que está passando fica destacado; no feed, o card mostra "📑 N assuntos" e a busca encontra pelos assuntos.
+  Se o autor já pôs capítulos na descrição, eles são usados. Roda sozinho para a fila e o topo do feed
+  (um por vez, em segundo plano) e na hora para o vídeo que você abre. Configuração em Ajustes → IA local
+  (endereço do Ollama, modelo; o padrão escolhe um qwen2.5/llama3 que estiver baixado).
+- **Player**: "Da sua fila · 3 de 12", Anterior/Próximo, minimizar (o vídeo segue tocando no canto enquanto
+  você navega), e o "voltar" do celular minimiza em vez de sair do site. Assistir 20 s conta como visto
+  e tira o vídeo da fila; se parar no meio, ele fica em Continuar.
 - **Atualiza sozinho**: a cada 15 minutos o servidor confere o GitHub; se houver versão nova, ele se
   atualiza e reinicia (o vigia sobe de novo em segundos). Em Ajustes → Versão dá para forçar.
 - Senha de acesso (o site fica público pelo túnel). Você entra uma vez em cada aparelho e fica logado.

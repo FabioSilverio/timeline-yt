@@ -34,6 +34,20 @@ function pagCanal(id, nome) {
 }
 globalThis.fetch = async (url, opts) => {
   const u = new URL(String(url));
+  // Ollama de mentira
+  if (u.port === "11434") {
+    if (u.pathname === "/api/tags") return new Response(JSON.stringify({ models: [{ name: "qwen2.5:7b" }, { name: "nomic-embed-text" }] }));
+    if (u.pathname === "/api/chat") {
+      await new Promise((r) => setTimeout(r, 1500));
+      const corpo = JSON.parse(opts.body);
+      const titulo = corpo.messages[1].content.match(/Título: (.*)/)[1];
+      const content = JSON.stringify({
+        resumo: `Discussão sobre ${titulo.slice(0, 40)}.`,
+        capitulos: [{ inicio: "00:00", titulo: "Abertura e contexto" }, { inicio: "03:20", titulo: "Primeira polêmica" }, { inicio: "09:45", titulo: "Réplica e tréplica" }, { inicio: "15:10", titulo: "Considerações finais" }],
+      });
+      return new Response(JSON.stringify({ message: { role: "assistant", content } }));
+    }
+  }
   if (!u.hostname.endsWith("youtube.com")) return real(url, opts);
   await new Promise((r) => setTimeout(r, 20));
   const ok = (body) => new Response(body, { status: 200 });
@@ -50,11 +64,16 @@ globalThis.fetch = async (url, opts) => {
     return ok(pagCanal(id, nomes.get(id)));
   }
   if (u.pathname.startsWith("/channel/")) { const id = u.pathname.split("/")[2]; return ok(pagCanal(id, nomes.get(id) || id)); }
+  if (u.pathname === "/api/timedtext") {
+    const events = Array.from({ length: 60 }, (_, i) => ({ tStartMs: i * 20000, segs: [{ utf8: `fala número ${i} sobre o tema ${Math.floor(i / 15)}` }] }));
+    return ok(JSON.stringify({ events }));
+  }
   if (u.pathname === "/watch") {
     const v = u.searchParams.get("v");
     const canal = idCanal("Canal Externo " + (hash(v) % 3));
     nomes.set(canal, "Canal Externo " + (hash(v) % 3));
-    return ok(`"videoDetails":{"videoId":"${v}","title":"Vídeo externo \\"${v}\\" sobre debate","lengthSeconds":"${(hash(v) % 5400) + 60}","channelId":"${canal}","author":"Canal Externo ${hash(v) % 3}","viewCount":"4321"},"publishDate":"${new Date(Date.now() - 3600e3).toISOString()}"`);
+    const legendas = `"captions":{"playerCaptionsTracklistRenderer":{"captionTracks":[{"baseUrl":"https://www.youtube.com/api/timedtext?v=${v}\\u0026lang=pt\\u0026kind=asr","name":{"simpleText":"Português (gerado automaticamente)"},"vssId":"a.pt","languageCode":"pt","kind":"asr"}]}}`;
+    return ok(legendas + `,"shortDescription":"Inscreva-se!\\nlink na bio",` + `"videoDetails":{"videoId":"${v}","title":"Vídeo externo \\"${v}\\" sobre debate","lengthSeconds":"${(hash(v) % 5400) + 60}","channelId":"${canal}","author":"Canal Externo ${hash(v) % 3}","viewCount":"4321"},"publishDate":"${new Date(Date.now() - 3600e3).toISOString()}"`);
   }
   return new Response("", { status: 404 });
 };

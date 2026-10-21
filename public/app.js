@@ -177,7 +177,8 @@ function passaFiltro(v, f) {
 function passaBusca(v, q) {
   if (!q) return true;
   const c = D.canais[v.canal];
-  return semAcento(`${v.titulo} ${c?.titulo || ""} ${v.descricao || ""}`).includes(q);
+  const assuntos = (v.capitulos || []).map((x) => x.t).join(" ");
+  return semAcento(`${v.titulo} ${c?.titulo || ""} ${v.descricao || ""} ${v.resumo || ""} ${assuntos}`).includes(q);
 }
 
 // O feed nunca mostra o que já foi visto, está na fila ou foi descartado
@@ -335,8 +336,9 @@ function acoesDo(v) {
 
 function etiquetas(v) {
   const tags = v.tags.filter((t) => ROT_TAG[t] && !(t === "eua" && ui.filtro === "eua"));
-  if (!tags.length) return null;
-  return h("div", { class: "etiquetas" }, tags.map((t) => h("span", { class: `etq ${t}` }, ROT_TAG[t])));
+  const minut = v.capitulos?.length ? h("span", { class: "etq minut", title: v.capitulos.map((c) => `${duracao(c.s)} ${c.t}`).join("\n") }, `📑 ${v.capitulos.length} assuntos`) : null;
+  if (!tags.length && !minut) return null;
+  return h("div", { class: "etiquetas" }, tags.map((t) => h("span", { class: `etq ${t}` }, ROT_TAG[t])), minut);
 }
 
 function botaoSimilares(v) {
@@ -893,6 +895,10 @@ async function tocar(id, fila, origem) {
   P.id = id;
   abrirCheio();
   preencherPlayer(v);
+  renderAssuntos(v);
+  // pede a minutagem sozinho para vídeos longos, se a IA local estiver ligada
+  if (D.ia?.disponivel && D.ia.auto && !v.capitulos?.length && !v.capStatus && (!v.duracao || v.duracao >= 6 * 60))
+    api("/api/minutagem", { id }).then((r) => ((v.capStatus = r.capStatus), P.id === id && renderAssuntos(v))).catch(() => {});
   const YT = await carregarApiYT();
   const prog = D.progresso[id];
   const inicio = prog && prog.t < prog.d - 20 ? prog.t : 0;
@@ -1015,6 +1021,79 @@ function preencherPlayer(v) {
   if (!prox.length) $("#pl-fila").append(h("p", { class: "pl-meta" }, "Fim da lista. Feche ou escolha outro vídeo no feed."));
 }
 
+// ---------- minutagem (IA local) no player ----------
+
+function renderAssuntos(v) {
+  const box = $("#pl-assuntos");
+  box.replaceChildren();
+  if (!v) return;
+  if (v.capitulos?.length) {
+    box.append(
+      h("h3", {}, "Assuntos"),
+      v.resumo ? h("p", { class: "pl-resumo" }, v.resumo) : null,
+      h(
+        "div",
+        { class: "pl-capitulos" },
+        v.capitulos.map((c, i) =>
+          h(
+            "button",
+            { class: "pl-cap", dataset: { s: c.s, i }, onclick: () => (P.player?.seekTo?.(c.s, true), P.player?.playVideo?.()) },
+            h("b", {}, duracao(c.s)),
+            h("span", {}, c.t),
+          ),
+        ),
+      ),
+      h("small", { class: "pl-fonte" }, v.capFonte === "descricao" ? "Minutagem do próprio autor" : "Minutagem feita pela IA local"),
+    );
+    return;
+  }
+  const st = v.capStatus;
+  if (st === "na-fila" || st === "gerando") {
+    box.append(h("p", { class: "pl-ia" }, h("span", { class: "girando-txt" }, "⏳"), st === "gerando" ? " A IA local está lendo o vídeo e fazendo a minutagem…" : " Na fila da IA local para minutagem…"));
+    vigiarMinutagem(v.id);
+    return;
+  }
+  if (!D.ia?.disponivel) return;
+  const pedir = async (forcar) => {
+    try {
+      const r = await api("/api/minutagem", { id: v.id, forcar });
+      v.capStatus = r.capStatus;
+      renderAssuntos(v);
+    } catch (e) {
+      avisar(e.message, null, true);
+    }
+  };
+  if (st === "sem-legenda") box.append(h("p", { class: "pl-ia" }, "Este vídeo não tem legendas, então a IA não consegue minutar."));
+  else if (st === "erro") box.append(h("p", { class: "pl-ia" }, "A minutagem falhou. ", h("button", { class: "link", onclick: () => pedir(true) }, "Tentar de novo")));
+  else box.append(h("button", { class: "btn", onclick: () => pedir(false) }, "📑 Fazer minutagem com a IA"));
+}
+
+let vigiaMinutagem = null;
+function vigiarMinutagem(id) {
+  clearInterval(vigiaMinutagem);
+  vigiaMinutagem = setInterval(async () => {
+    if (P.id !== id || !P.modo) return clearInterval(vigiaMinutagem);
+    try {
+      const r = await api(`/api/minutagem?id=${id}`);
+      const v = D.videos.find((x) => x.id === id);
+      if (!v) return clearInterval(vigiaMinutagem);
+      Object.assign(v, { capitulos: r.capitulos, resumo: r.resumo, capStatus: r.capStatus, capFonte: r.capFonte });
+      if (!["na-fila", "gerando"].includes(r.capStatus)) {
+        clearInterval(vigiaMinutagem);
+        renderAssuntos(v);
+      }
+    } catch {}
+  }, 6000);
+}
+
+// marca o assunto que está passando agora
+function marcarAssuntoAtual(t) {
+  const caps = $$("#pl-assuntos .pl-cap");
+  let atual = -1;
+  for (const c of caps) if (Number(c.dataset.s) <= t) atual = Number(c.dataset.i);
+  caps.forEach((c) => c.classList.toggle("atual", Number(c.dataset.i) === atual));
+}
+
 function proximos(n) {
   const i = P.fila.indexOf(P.id);
   const out = [];
@@ -1034,6 +1113,7 @@ function acompanhar(fechando) {
   const t = pl.getCurrentTime();
   const d = pl.getDuration();
   if (!d) return;
+  marcarAssuntoAtual(t);
   if (t >= 15 && t / d < 0.92) D.progresso[id] = { t, d, ts: Date.now() };
   else if (t / d >= 0.92) delete D.progresso[id];
   if (D.ajustes.marcarAoTerminar !== false && !P.contados.has(id) && t >= Math.min(20, d * 0.5)) {
@@ -1375,6 +1455,45 @@ function editorLista(titulo, ajuda, valores, campo) {
   );
 }
 
+// IA local (Ollama) para a minutagem dos vídeos
+function cartaoIA() {
+  const caixa = h("div", { class: "cartao" }, h("h2", {}, "IA local (minutagem dos vídeos)"), h("p", {}, "Conferindo o Ollama…"));
+  const desenhar = (st) => {
+    const url = h("input", { class: "campo", value: st.ajustes.url, placeholder: "http://127.0.0.1:11434" });
+    const modelo = h(
+      "select",
+      {},
+      h("option", { value: "", selected: !st.ajustes.modelo }, `Automático${st.modelo ? ` (${st.modelo})` : ""}`),
+      ...st.modelos.map((m) => h("option", { value: m, selected: st.ajustes.modelo === m }, m)),
+    );
+    const salvar = async (extra = {}) => {
+      try {
+        desenhar(await api("/api/ia", { url: url.value, modelo: modelo.value, ...extra }));
+        avisar("IA local atualizada");
+      } catch (e) {
+        avisar(e.message, null, true);
+      }
+    };
+    caixa.replaceChildren(
+      h("h2", {}, "IA local (minutagem dos vídeos)"),
+      h(
+        "p",
+        {},
+        "Lê as legendas dos vídeos longos e usa o Ollama do PC para marcar os assuntos com o minuto em que começam, mais um resumo. Aparece no player e entra na busca. ",
+        st.disponivel ? h("b", { style: "color:var(--visto)" }, `Funcionando com ${st.modelo}.`) : h("b", { style: "color:var(--menos)" }, st.erro || "Ollama não encontrado."),
+        st.disponivel ? ` ${st.feitos} feitas desde que o servidor ligou${st.pendentes ? `, ${st.pendentes} na fila` : ""}.` : "",
+        st.ytdlp ? "" : " (Dica: com o yt-dlp instalado no PC, dá para minutar também vídeos cujas legendas o YouTube não entrega direto.)",
+      ),
+      h("label", { class: "interruptor" }, h("span", {}, "Minutar sozinho", h("small", {}, "Vídeos da sua fila e os melhores do feed com mais de 8 minutos, um por vez, em segundo plano.")), h("input", { type: "checkbox", checked: !!st.ajustes.auto, onchange: (e) => salvar({ auto: e.target.checked }) })),
+      h("div", { class: "linha-form", style: "margin-top:10px" }, url, modelo, h("button", { class: "pilula forte", onclick: () => salvar() }, "Salvar e testar")),
+    );
+  };
+  api("/api/ia")
+    .then(desenhar)
+    .catch((e) => caixa.replaceChildren(h("h2", {}, "IA local (minutagem dos vídeos)"), h("p", {}, `Não consegui ler o estado da IA: ${e.message}`)));
+  return caixa;
+}
+
 function renderAjustes() {
   const box = $("#lista");
   const a = D.ajustes;
@@ -1418,6 +1537,7 @@ function renderAjustes() {
         "Procurar atualização agora",
       ),
     ),
+    cartaoIA(),
   );
   const salvar = (mud) => api("/api/ajustes", { ajustes: mud }).then(() => carregar(true));
   const chave = (rot, ajuda, k) =>

@@ -158,3 +158,20 @@ test("feed: agrupa o mesmo assunto e não empilha tema nem canal", async () => {
   assert.ok(ordem.indexOf("g") < ordem.indexOf("f"), ordem.join(","));
   assert.ok(ordem.includes("h"));
 });
+
+test("minutagem: descrição, legendas e resposta da IA", async () => {
+  const { capitulosDaDescricao, arrayJson, linhasDeEventos } = await import("../lib/legendas.mjs");
+  const { validarCapitulos, textoDaTranscricao, escolherModelo } = await import("../lib/ia.mjs");
+  const desc = "Apoie o canal\n00:00 Abertura\n05:12 - Lula e o STF\n1:02:03 Perguntas do público\nlink";
+  assert.deepEqual(capitulosDaDescricao(desc), [{ s: 0, t: "Abertura" }, { s: 312, t: "Lula e o STF" }, { s: 3723, t: "Perguntas do público" }]);
+  assert.deepEqual(capitulosDaDescricao("só 01:00 no meio do texto"), []);
+  const html = `x"captionTracks":[{"baseUrl":"https://a/b?x=1\\u0026y=[2]","languageCode":"pt","name":{"runs":[{"text":"Port"}]}}],"outro":1`;
+  assert.equal(arrayJson(html, "captionTracks")[0].baseUrl, "https://a/b?x=1&y=[2]");
+  const linhas = linhasDeEventos([{ tStartMs: 0, segs: [{ utf8: "oi" }] }, { tStartMs: 10000, segs: [{ utf8: "tudo bem" }] }, { tStartMs: 45000, segs: [{ utf8: "[Música]" }] }, { tStartMs: 61000, segs: [{ utf8: "outro tema" }] }]);
+  assert.deepEqual(linhas, [{ s: 0, texto: "oi tudo bem" }, { s: 61, texto: "outro tema" }]);
+  assert.match(textoDaTranscricao(linhas), /^\[00:00\] oi tudo bem\n\[01:01\] outro tema$/);
+  const caps = validarCapitulos([{ inicio: "02:00", titulo: "B" }, { inicio: "00:10", titulo: "A" }, { inicio: "02:05", titulo: "quase igual" }, { inicio: "99:00", titulo: "depois do fim" }, { inicio: "x", titulo: "ruim" }], 1800);
+  assert.deepEqual(caps, [{ s: 0, t: "A" }, { s: 120, t: "B" }]);
+  assert.equal(escolherModelo(["llama3:8b", "qwen2.5:7b"], ""), "qwen2.5:7b");
+  assert.equal(escolherModelo(["llama3:8b", "qwen2.5:7b"], "llama3:8b"), "llama3:8b");
+});

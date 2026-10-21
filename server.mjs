@@ -162,6 +162,32 @@ function servirArquivo(req, res, arquivo) {
 
 // ---------- montagem da timeline ----------
 
+// Melhores do feed ainda não vistos (para a IA saber o que minutar primeiro)
+motor.topoDoFeed = () => {
+  const e = E();
+  const limite = Date.now() - 3 * 24 * 3600e3;
+  const candidatos = Object.values(armazem.videos).filter(
+    (v) => Date.parse(v.publicado) >= limite && !v.short && !e.vistos[v.id] && !e.depois[v.id] && !e.ocultos[v.id],
+  );
+  const ctx = { canais: e.canais, stats: e.stats, termos: e.termos, interesses: e.interesses, bloqueios: e.bloqueios, pesosCategoria: e.ajustes.pesosCategoria, exibicoes: e.exibicoes, pesoProgramas: 0.15 };
+  return montarTimeline(candidatos, ctx).filter((v) => !v.tags.includes("programa")).slice(0, 30);
+};
+
+function estadoIA() {
+  const ia = motor.ia;
+  return {
+    disponivel: ia.disponivel,
+    modelos: ia.modelos,
+    modelo: ia.modelo,
+    erro: ia.erro,
+    ytdlp: ia.ytdlp,
+    atual: ia.atual,
+    pendentes: ia.fila.length,
+    feitos: ia.feitos,
+    ajustes: E().ajustes.ia,
+  };
+}
+
 function payloadTimeline() {
   const e = E();
   const agora = Date.now();
@@ -197,6 +223,9 @@ function payloadTimeline() {
     chaves: [...new Set(palavras(v.titulo))].slice(0, 12),
     explorar: semInteracao(v.canal),
     exib: e.exibicoes[v.id]?.n || 0,
+    capitulos: v.capitulos,
+    resumo: v.resumo,
+    capStatus: v.capStatus,
     nota: Math.round(v.nota * 1000) / 1000,
     tags: v.tags,
     motivo: v.motivo,
@@ -224,6 +253,7 @@ function payloadTimeline() {
     status: motor.status,
     pastaDados: armazem.dir,
     versao: atualizador.info,
+    ia: { disponivel: motor.ia.disponivel, modelo: motor.ia.modelo, auto: e.ajustes.ia.auto },
   };
 }
 
@@ -318,6 +348,12 @@ async function api(req, res, rota) {
   if (rota === "/api/timeline" && metodo === "GET") return enviar(req, res, 200, payloadTimeline());
   if (rota === "/api/status" && metodo === "GET") return enviar(req, res, 200, motor.status);
   if (rota === "/api/resumo" && metodo === "GET") return enviar(req, res, 200, resumo());
+  if (rota === "/api/ia" && metodo === "GET") return enviar(req, res, 200, estadoIA());
+  if (rota === "/api/minutagem" && metodo === "GET") {
+    const v = armazem.videos[new URL(req.url, "http://x").searchParams.get("id")];
+    if (!v) return enviar(req, res, 404, { erro: "vídeo não encontrado" });
+    return enviar(req, res, 200, { capitulos: v.capitulos, resumo: v.resumo, capStatus: v.capStatus, capErro: v.capErro, capFonte: v.capFonte, naFila: motor.ia.fila.indexOf(v.id) + 1 });
+  }
   if (rota === "/api/estado-ids" && metodo === "GET") {
     const e = E();
     const out = {};
@@ -388,6 +424,22 @@ async function api(req, res, rota) {
       if (!/^[\w-]{11}$/.test(id)) return enviar(req, res, 400, { erro: "id de vídeo inválido" });
       const r = await motor.sinal(corpo.tipo, id, corpo.dica || {});
       return enviar(req, res, 200, { ok: true, titulo: r.video.titulo, canal: r.canal?.titulo || "" });
+    }
+    case "/api/minutagem": {
+      if (!motor.ia.disponivel) await motor.verificarOllama();
+      if (!motor.ia.disponivel) return enviar(req, res, 503, { erro: motor.ia.erro || "IA local indisponível" });
+      const capStatus = motor.pedirMinutagem(String(corpo.id || ""), { prioridade: true, forcar: !!corpo.forcar });
+      return enviar(req, res, 200, { capStatus });
+    }
+    case "/api/ia": {
+      const ia = e.ajustes.ia;
+      if (typeof corpo.url === "string" && /^https?:\/\//.test(corpo.url.trim())) ia.url = corpo.url.trim();
+      if (typeof corpo.modelo === "string") ia.modelo = corpo.modelo.trim();
+      if (typeof corpo.auto === "boolean") ia.auto = corpo.auto;
+      armazem.salvar();
+      await motor.verificarOllama();
+      if (ia.auto) motor.planejarIA().catch(() => {});
+      return enviar(req, res, 200, estadoIA());
     }
     case "/api/importar": {
       const r = motor.importar(corpo.tipo, corpo.conteudo);
